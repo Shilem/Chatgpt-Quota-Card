@@ -1,0 +1,54 @@
+{
+  "releaseVersion": "v8.2.3",
+  "patchMarker": "codex-quota-card-patch:v8",
+  "platform": "macOS",
+  "minimumNodeVersion": "18.15.0",
+  "createdAt": "2026-08-14T10:56:18.000Z",
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "size": 6590,
+      "sha256": "4a711194469fd2c810f2276ead267374ff9e1a9a7fc1038bf2a50a4f8d77ae09"
+    },
+    {
+      "path": "CLAUDE.md",
+      "size": 1917,
+      "sha256": "62abad0a3c99cd9f40b870b9ba6bef01f3b2034be2038f18667ff13418fd1968"
+    },
+    {
+      "path": "NOTICE.md",
+      "size": 1242,
+      "sha256": "07647feb16da2beb2843a710c7cd00efb0e8b433c0759c93cd43e367148ee715"
+    },
+    {
+      "path": "README.md",
+      "size": 16968,
+      "sha256": "c97630706714f5f0bf62ca5e58f14960c332aa0a3b65f3046209d7ab605048f1"
+    },
+    {
+      "path": "应用企业月额度卡片.command",
+      "size": 3834,
+      "sha256": "e4f5488d54030b9db993ec3818834ca9e14e08483ae6188497f4dcc5b88ae167"
+    },
+    {
+      "path": "恢复额度卡片备份.command",
+      "size": 3773,
+      "sha256": "93a75fd3414ee082ae8577a52e4ae12c4d094f93aba989d999b9ddae2493fbff"
+    },
+    {
+      "path": "bin/launcher-common.zsh",
+      "size": 3571,
+      "sha256": "895437513d844db845a9bb7a2f957bf196ee36264a1dbdf861dd779bd0c3aba1"
+    },
+    {
+      "path": "bin/patch-codex-quota-card.mjs",
+      "size": 80250,
+      "sha256": "9b858a4accf0824b897ac678a60b004f6e313f89288a4cdc93d15e4c8891e94c"
+    },
+    {
+      "path": "bin/verify-release.mjs",
+      "size": 4128,
+      "sha256": "a0ecd291a842c1a5bddee4110c036589d3f41038dd2d99e1127484a90fa6670a"
+    }
+  ]
+}

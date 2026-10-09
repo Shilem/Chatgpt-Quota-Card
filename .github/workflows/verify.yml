@@ -1,0 +1,28 @@
+name: 验证与候选打包
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  candidate:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 发行边界回归
+        run: node maintainer/verify-project.mjs
+      - name: 语法检查
+        run: |
+          node --check bin/patch-codex-quota-card.mjs
+          zsh -n 应用企业月额度卡片.command 恢复额度卡片备份.command bin/launcher-common.zsh
+      - name: 构建并重新解压验证
+        run: node maintainer/build-release.mjs "$RUNNER_TEMP/candidate"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candidate-package
+          path: ${{ runner.temp }}/candidate/*
+          if-no-files-found: error
