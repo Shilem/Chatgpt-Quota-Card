@@ -18,6 +18,9 @@ initialize_launcher() {
     style_dim=""
     style_reset=""
   fi
+  if ! release_version="$(/usr/bin/plutil -extract releaseVersion raw -o - "$project_dir/release-manifest.json")"; then
+    launcher_error "无法读取发行版本。请重新获取完整发行包。"
+  fi
 }
 
 pause_before_close() {

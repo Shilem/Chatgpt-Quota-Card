@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { createHash, randomUUID, createPublicKey, verify } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdir, readFile, writeFile, rename, rm, realpath, stat, mkdtemp, readdir } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { mkdir, readFile, writeFile, rename, rm, realpath, stat, lstat, copyFile, mkdtemp, readdir } from 'node:fs/promises';
+import { dirname, basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { Readable } from 'node:stream';
@@ -81,6 +81,29 @@ export function shouldProcess(record, retry) {
   if (!record) return true;
   return retry && ['failed', 'running'].includes(record.status);
 }
+async function assertJob(stateDir, job) {
+  if (dirname(job) !== stateDir || !/^job-[A-Za-z0-9]+$/.test(basename(job)) || !(await lstat(job)).isDirectory() || await realpath(job) !== job) throw new Error('任务路径不是监控目录中的独立真实目录');
+}
+export async function pruneArtifacts(stateDir, state, keep = 3) {
+  const records = Object.values(state.records).filter(r => r.finishedAt && r.status !== 'running').sort((a, b) => b.finishedAt.localeCompare(a.finishedAt));
+  for (const record of records.slice(keep)) {
+    if (record.artifactsPrunedAt) continue;
+    await assertJob(stateDir, record.job);
+    const targets = [join(record.job, 'client.zip'), join(record.job, 'official')];
+    const validation = join(record.job, 'validation');
+    try {
+      if (!(await lstat(validation)).isDirectory() || await realpath(validation) !== validation) throw new Error('验证目录类型或路径不正确');
+      for (const entry of await readdir(validation, { withFileTypes: true })) {
+        if (!/^validation-[A-Za-z0-9]+$/.test(entry.name) || !entry.isDirectory()) throw new Error('验证目录包含未知内容，拒绝清理');
+        const directory = join(validation, entry.name);
+        for (const name of ['Client.app', 'backups', 'profile']) targets.push(join(directory, name));
+      }
+    } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    // 仅删除本维护任务的大文件；保留报告、日志、清单以及正式客户端的全部备份。
+    for (const path of targets) await rm(path, { recursive: true, force: true });
+    record.artifactsPrunedAt = new Date().toISOString();
+  }
+}
 async function officialFetch(url, milliseconds) {
   const signal = AbortSignal.timeout(milliseconds);
   for (let i = 0; i < 6; i++) {
@@ -130,6 +153,7 @@ export async function watchClient(options) {
     }
   }
   try {
+    await writeFile(join(lock, 'owner.json'), JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }), { flag: 'wx', mode: 0o600 });
     try { state = JSON.parse(await readFile(statePath, 'utf8')); }
     catch (error) { if (error.code !== 'ENOENT') throw error; state = { schemaVersion: 1, installationId: randomUUID(), records: {} }; }
     if (state.schemaVersion !== 1 || !/^[a-f0-9-]{36}$/.test(state.installationId) || !state.records || typeof state.records !== 'object' || Array.isArray(state.records)) throw new Error('监控状态损坏，拒绝重置');
@@ -164,8 +188,16 @@ export async function watchClient(options) {
     await writeState(statePath, state);
     await writeFile(join(job, 'appcast.xml'), xml, { mode: 0o600 });
     const archive = join(job, 'client.zip');
-    const download = await officialFetch(candidate.url, 600000);
-    await pipeline(Readable.fromWeb(download.body), createWriteStream(archive, { flags: 'wx', mode: 0o600 }));
+    const cached = Object.values(state.records).find(r => r.archiveHash && !r.artifactsPrunedAt && JSON.stringify(r.candidate) === JSON.stringify(candidate));
+    if (cached) {
+      await assertJob(stateDir, cached.job);
+      const existing = join(cached.job, 'client.zip');
+      if (!(await lstat(existing)).isFile()) throw new Error('缓存安装包不是普通文件');
+      await copyFile(existing, archive, 1);
+    } else {
+      const download = await officialFetch(candidate.url, 600000);
+      await pipeline(Readable.fromWeb(download.body), createWriteStream(archive, { flags: 'wx', mode: 0o600 }));
+    }
     if ((await stat(archive)).size !== candidate.length) throw new Error('安装包字节数与清单不一致');
     const bytes = await readFile(archive); verifyArchive(bytes, candidate.signature);
     const archiveHash = createHash('sha256').update(bytes).digest('hex');
@@ -178,6 +210,8 @@ export async function watchClient(options) {
     if (run('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleShortVersionString', appPlist]) !== candidate.version || run('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleVersion', appPlist]) !== candidate.build) throw new Error('官方包内版本或构建号与清单不一致');
     const result = await validateClient({ app, output: join(job, 'validation'), launch: false });
     state.records[key] = { ...state.records[key], status: result.report.status, reportPath: result.reportPath, archiveHash, finishedAt: new Date().toISOString(), releaseEligible: false };
+    await writeState(statePath, state);
+    await pruneArtifacts(stateDir, state);
     await writeState(statePath, state);
     await notify(`稳定清单 ${candidate.version} / ${candidate.build} 隔离验证完成：${result.report.status}，仍需人工验收。报告：${result.reportPath}`);
     return state.records[key];

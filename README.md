@@ -1,191 +1,160 @@
 # Chatgpt-Quota-Card
 
-这个工具给 macOS Codex/ChatGPT 客户端左侧栏底部增加一张常驻额度卡片：
+[![发行校验](https://github.com/Shilem/Chatgpt-Quota-Card/actions/workflows/verify.yml/badge.svg)](https://github.com/Shilem/Chatgpt-Quota-Card/actions/workflows/verify.yml)
 
-- `@shopee.com` 企业账户：Monthly 剩余额度，以及本月已用量/总额度
-- 其他账户：5h 和 Weekly 剩余额度及重置时间
+为 macOS Codex 客户端侧边栏添加常驻额度卡片，并提供图形助手，在客户端更新后检查 GitHub 补丁版本、热更新助手并协助重新应用卡片。
 
-卡片仅对 ChatGPT 登录方式显示。普通账户复用客户端已有额度状态；企业账户复用 Usage 页面已有的工作区月额度查询。
+> **适用客户端：** Bundle ID 为 `com.openai.codex` 的 Codex。部分安装沿用 `ChatGPT.app` 名称；普通 ChatGPT 聊天客户端不在支持范围内。
+>
+> **当前状态：** 仓库已公开，尚未发布稳定 Release。当前候选包收到用户使用正常的反馈；启动期 AMFI（macOS 执行安全检查）、视觉和真实额度数据验收仍未完整完成。
 
-企业 Monthly 卡片复用 Usage 页面同一个工作区月额度查询，并按页面相同的一分钟周期刷新。
+## 功能
 
-当前补丁标记为 v8，工具发行版为 v8.2.3。v8 适配客户端将同一个原生额度提醒组件同时挂载在“侧边栏底部”和“侧边栏收起态固定浮动区域”的结构：工具沿唯一 JSX 调用关系定位真正持有额度状态的父组件和鉴权包装组件，只保留侧边栏底部卡片，并显式禁用收起态浮动挂载。侧边栏底部可由旧版布局类或新版固定 `usage-alert` 插槽证明，不再假定所有挂载都携带 `className`。卡片根布局左右各保留 8px、底部保留 8px，卡片仍然只显示文字，不包含进度条。
+- **侧边栏额度卡片：** `@shopee.com` 企业账户显示 Monthly 剩余额度、本月已用量与总额度；其他账户显示 5h、Weekly 剩余额度和重置时间。
+- **复用原生数据：** 仅在 ChatGPT 登录方式下显示，使用客户端已有额度状态与 Usage 月额度查询；Monthly 按一分钟周期刷新。
+- **图形更新助手：** 查看状态、启停提醒、应用补丁、打开日志与备份，无需手动输入监控命令。
+- **助手热更新：** 检测本机客户端变化后，先检查固定 GitHub 仓库的稳定 Release，校验通过后自动切换助手运行文件。
+- **可检查、可恢复：** 写入前验证兼容性与完整性，创建备份；应用失败执行回滚，支持单独恢复备份。
 
-v7.2 新增客户端 `26.715.72359` 的精确适配，并处理“已经应用过本工具补丁，随后通过客户端自动升级”产生的失效签名链。该流程不是通用签名绕过：只有版本、Bundle ID、官方 Team ID、指定要求、ASAR 完整性、未打补丁结构和全部签名目标同时匹配时，才允许在用户确认后重新建立本机签名链。
+卡片只挂载在侧边栏底部，保留左右和底部间距；侧边栏收起时不显示浮动卡片。
 
-v7.3 将客户端版本从硬白名单降级为已验证记录，改用完整语义能力契约判断新版本兼容性。工具会唯一解析侧边栏父子组件、额度状态 Hook、账户 Hook、窗口映射和 Monthly 查询能力；Monthly Hook 可来自旧版跨分包 import，也可来自新版同分包本地函数。未知版本只有在 ASAR 头部、目标分包整体与分块哈希、Electron fuse、签名结构和内存补丁后二次解析全部通过时才会显示“自动验证通过”。
+## 运行要求
 
-v7.4 修复客户端 `26.721.30844` 新增推送环境权限后的启动失败：临时签名除移除绑定 OpenAI Team ID 的权限外，还会移除 `com.apple.developer.aps-environment`。否则即使 `codesign --verify --deep --strict` 通过，AMFI 仍会以“临时签名包含受限权限”拒绝主程序执行。
+| 项目 | 要求 |
+| --- | --- |
+| 系统 | macOS，当前分发面向 Apple Silicon |
+| 客户端 | `com.openai.codex`；常见路径为 `/Applications/Codex.app` 或 `/Applications/ChatGPT.app` |
+| 图形安装器 | arm64 Node.js 22 或更高版本 |
+| 单独运行补丁命令 | Node.js 18.15 或更高版本 |
+| 网络 | 助手检查和下载 GitHub Release 时需要联网 |
 
-v7.4.1 修复项目根目录存在 CodeGraph 数据库时双击入口误报“发行目录包含额外文件”的问题。校验器只忽略根目录中明确允许的 `.codegraph/`、`.codex/` 与 `backups/` 本地数据目录；所有运行文件仍逐项校验大小和 SHA-256，其他未知文件或目录继续拒绝。
+图形安装器检查常见安装路径和当前用户 NVM 目录。缺少兼容 Node.js 时提供官网安装入口，不内嵌 Node，也不自动修改系统环境。
 
-v7.4.2 修复 Finder 自动生成根目录 `.DS_Store` 后双击入口误报发行完整性失败的问题。校验器只忽略根目录中精确命名的普通 `.DS_Store` 文件；同名目录、符号链接、嵌套文件和其他未知内容继续拒绝，所有发行文件仍逐项校验大小和 SHA-256。
+### 当前版本
 
-v8.0.0 修复侧边栏收起后 Usage 卡片仍固定悬浮的问题。兼容性检查现在会解析额度卡片包装组件的全部挂载区域，要求侧边栏底部挂载唯一；若存在原生提醒使用的收起态固定浮动挂载，则在等长修改中显式禁用，并在补丁后二次解析时确认浮动调用已经消失。
+| 项目 | 值 |
+| --- | --- |
+| 工具发行版本 / 目标官方版本 | `26.1007.21159` |
+| 对应官方构建号 | `20052` |
+| 同版本补丁修订 | `releaseRevision: 1` |
+| 内部补丁结构标记 | `v8` |
 
-v8.0.1 适配客户端 `26.730.61309` 的侧边栏插槽重构：侧边栏底部原生额度提醒改为固定 React key `usage-alert` 的空属性调用，收起态浮动调用仍保留布局类。检查器现在分别识别具名插槽和固定浮动布局，继续要求所有调用可解析、唯一归类，并保留补丁后二次解析门槛。
+公开版本号、Release tag、ZIP 文件名和安装器版本跟随官方客户端；同一官方版本的补丁改进由 `releaseRevision` 区分。版本号用于记录验证对象，兼容性仍由实际结构、完整性和签名检查决定。
 
-v8.0.2 修复新版 `usage-alert` 插槽中 Usage 卡片左右贴边的问题。补丁组件根节点使用 `mx-2` 留出左右各 8px，内部卡片填满剩余宽度；已安装但缺少该间距契约的 v8 会显示 `upgrade-ready`，可重新执行补丁完成等长升级。
+## 安装与使用
 
-v8.0.3 在保留左右各 8px 的基础上增加底部 8px 间距，避免 Usage 卡片紧贴下方内容分隔线。顶部距离不变；只有 `mx-2` 的 v8.0.2 会进入 `upgrade-ready`，可再次等长升级。
+### 图形助手
 
-v8.1.0 适配客户端 `26.901.51231` 的跨分包额度结构：从 app-initial 导入并验证 Usage 窗口规范化函数与 Monthly Hook。针对新版启用的 Electron ASAR 完整性 Fuse，补丁只在目标分包原始整体和分块哈希有效时同步更新文件表哈希与 `Info.plist`，保持等长写入和补丁后二次校验。
+稳定版发布后，从 [GitHub Releases](https://github.com/Shilem/Chatgpt-Quota-Card/releases) 下载用户安装器及校验文件：
 
-v8.1.1 适配客户端 `26.903.61454` 的 ASAR 完整性 Fuse 关闭状态：应用前仍拒绝未打补丁但哈希不一致的目标分包；应用后识别本工具留下的补丁标记，允许关闭 Fuse 时文件表哈希保持原值，并继续执行签名、启动和回滚校验。双击入口版本横幅与发行清单同步更新。
-
-v8.2.0 适配客户端 `26.915.31945` 的额度提醒包装链重构：额度状态组件现在经过 `BYs → zYs → RYs → LYs` 多层 JSX 包装，工具会沿唯一 `className` 调用链解析到 `usage-alert` 侧边栏插槽和收起态固定挂载，再执行原有的等长替换、完整性元数据和补丁后二次校验。未识别的调用仍会拒绝写入，不使用版本号绕过语义检查。
-
-v8.2.1 适配客户端 `26.917.62051` 的 Monthly 查询 Hook 新增可选 `isPolling` 参数。检查器仍要求唯一月额度端点、`accountId/enabled` 参数、一分钟刷新，并验证省略 `isPolling` 时默认开启轮询；不符合契约的客户端仍会拒绝应用。
-
-v8.2.2 修复客户端 `26.924.22138` 启动失败：新版 Codex Framework 还内嵌 `ElectronAsarIntegrity` 字典摘要。Fuse 开启时，工具在更新 ASAR 文件表和 `Info.plist` 后同步更新这份摘要，再由内到外重签；检查和恢复也核对摘要，防止“应用成功但启动时被 Electron 拒绝”。
-
-v8.2.3 修复新版 Monthly 卡片误显示 `0%` 和 `Used 9.52 / 0`：按原生 Usage 页的规则优先读取与 `balance_unit` 一致的 `limit_amount.amount`，仅在允许时使用旧版 credit 总额度；缺失、单位不匹配或无限额度不再被当作 0。旧 v8 会进入 `upgrade-ready`，重新应用即可升级。同时显式重签和逐项检查新版四个 Aperitif Helper，缺少部分组件时拒绝操作。
-
-不要使用 v7.0：该版本把 Electron 的 ASAR 头部完整性值误当成整个文件的 SHA-256，会错误拒绝健康的官方客户端。v7.1 起已按 Electron 实际规则校验 ASAR 头部 JSON；Fuse 关闭时等长修改不会改变头部，v8.2.2 只在未打补丁目标分包哈希有效时开始事务，应用后允许本工具标记对应的文件表哈希保持原值；Fuse 开启时仅在目标分包整体与分块哈希有效时同步重写文件表、`Info.plist` 和启用时的 Framework 内嵌摘要，不会以头部哈希替代目标分包校验。
-
-## 使用方法
-
-最简单的方式是双击项目目录中的 `应用企业月额度卡片.command`。启动后会先展示功能介绍、修改范围、签名与钥匙串风险、备份位置，并要求输入 `y` 二次确认；直接回车或输入 `n` 会安全取消，不执行补丁。
-
-运行要求：
-
-- macOS；
-- Node.js 18.15 或更高版本；
-- Codex/ChatGPT 客户端位于 `/Applications/ChatGPT.app` 或 `/Applications/Codex.app`。也可以通过环境变量 `CODEX_PATCH_APP` 指定其他位置。
-
-此发行版记录的完整运行验证客户端为 `26.715.70719`、`26.715.72359`、`26.915.31945`，Bundle ID 必须为 `com.openai.codex`。新版本不因版本字符串单独拒绝，但必须通过完整语义能力契约、ASAR 内容与头部完整性、Electron fuse 和签名结构检查；Fuse 开启时还必须有可验证的目标分包整体与分块哈希，单一锚点相似不会被视为兼容。
-
-整个解压目录可以移动或改名，双击入口会自动定位同目录内的程序文件，不依赖制作者的个人路径。
-
-如果下载后的 `.command` 被 macOS 拦截，请先确认 ZIP 来源和 `release-manifest.json`，然后在 Finder 中右键该文件并选择“打开”。不要关闭 Gatekeeper，也不要运行来源不明的副本。
-
-也可以在终端运行：
-
-```bash
-node bin/patch-codex-quota-card.mjs check
-node bin/patch-codex-quota-card.mjs apply
+```text
+quota-user-assistant-installer-26.1007.21159-arm64.zip
+quota-user-assistant-installer-26.1007.21159-arm64.zip.sha256
 ```
 
-执行前必须先按 Command+Q 完全退出 Codex App。`apply` 会完成以下检查和操作：Fuse 开启的新版客户端会在内存中同步重写目标分包完整性元数据和 `Info.plist` 头部哈希。
+目前 Releases 为空，请勿把源码 ZIP 当作图形安装器。维护者可按[维护说明](https://github.com/Shilem/Chatgpt-Quota-Card/blob/main/maintainer/README.md)构建候选包；[Actions](https://github.com/Shilem/Chatgpt-Quota-Card/actions/workflows/verify.yml) 的 `candidate-package` 也是候选材料。
 
-- 验证补丁结构、ASAR 完整性字段和深度代码签名；
-- 创建同时校验 `app.asar` 与 `Info.plist` 的 v2 备份清单；
-- 在备份和临时文件写入前按文件系统汇总所需空间，空间不足时停止；
-- 写入前再次核对源文件，使用唯一临时文件原子替换；
-- 按 Helper/XPC、Framework/Plugin、主应用的顺序由内到外重签，并立即执行深度签名验证；
-- 任一步失败时恢复原文件（包括需要更新时的 Framework），并重新签名、验证回滚结果。
+1. 确认下载来源，在 ZIP 所在目录核对 SHA-256：
+   ```bash
+   shasum -a 256 -c quota-user-assistant-installer-26.1007.21159-arm64.zip.sha256
+   ```
+2. 解压，双击“额度卡片更新助手安装器.app”，选择客户端并确认安装。
+3. 打开 `~/Applications/额度卡片更新助手.app`。
+4. 首次安装卡片时选择“应用补丁”，按终端与弹窗提示操作。
 
-每份备份约等于一个完整 `app.asar`。当前版本约为 188 MiB，多次升级会持续占用空间；启动页会显示备份数量和总大小。确认客户端长期稳定后，可以手动归档或删除不再需要的旧备份，但应至少保留最近一份可用备份。
+安装只记录当前客户端基线，**基线一致不代表卡片已经安装**。关闭管理窗口不会停止后台提醒；可在窗口中停用。
 
-默认使用 macOS 临时签名。签名过程会按 Helper/XPC、Codex Framework 与 Sparkle 的独立签名目标、Framework/Plugin、主应用的顺序由内到外执行，并移除仅允许 OpenAI 原厂团队使用的 application identifier、application groups、team identifier、keychain access groups，以及临时签名不能使用的推送环境权限；否则 macOS AMFI 会拒绝启动临时签名的客户端。Electron 运行所需的 JIT、网络、相机等非受限权限会保留。最终校验同时检查根应用和每个预期签名目标，避免 `--deep` 漏掉松散辅助程序；实际启动与 AMFI 日志仍是独立验收层。
+### 客户端更新后会发生什么？
 
-若钥匙串中已有长期代码签名证书，可指定稳定身份：
+助手每 5 分钟观察所选客户端。变化连续观察两次、至少间隔一分钟后：
 
-```bash
-node bin/patch-codex-quota-card.mjs apply --sign-identity "证书名称"
-```
+1. 查询固定仓库 `Shilem/Chatgpt-Quota-Card` 的已发布、非预发布 Release。
+2. 有可用更新时，自动下载纯补丁包；检查资产来源、SHA-256、归档路径与类型、运行文件白名单、清单版本及自检结果，再原子切换到新助手。
+3. 提醒用户处理卡片。选择“应用补丁”后再次检查 GitHub 与客户端兼容性，并显示风险确认。
+4. 用户确认后正常退出客户端，重新核对内容、执行补丁和备份、复查成功，再请求启动同一路径的客户端。
 
-稳定身份有助于后续补丁继续保持同一签名身份，但从 OpenAI 官方签名首次切换时仍可能出现一次钥匙串授权。工具不会修改或放宽钥匙串访问控制。
+**助手升级无需确认；退出客户端和写入补丁必须由用户确认。** 用户取消时不会退出客户端。不能正常退出、客户端仍在变化或补丁失败时会停止，不强制杀进程。
 
-## 客户端更新后
+同版本 Release 的 ZIP 变化也会检查修订号，拒绝已建立基线后的同修订替换或修订回退。更新失败保留旧运行目录，并暂停应用补丁；窗口和日志显示原因。待处理变化每小时复查 GitHub，也可手动立即检查。
 
-补丁会把 OpenAI 官方签名替换为本机签名。客户端更新后先运行只读检查：若完整语义能力契约、ASAR 头部与目标分包内容完整性、Electron fuse 和签名状态全部通过，就可以继续应用；Fuse 开启时，工具会在应用阶段同步更新已验证的目标分包整体与分块哈希及 `Info.plist` 头部哈希；版本号只用于标记该版本是否完成过真实运行验收。
+助手不下载或更新官方客户端，不调用 AI 自动修复，也不自动发布。遇到不兼容版本，需要维护者适配并发布新补丁。
 
-若客户端曾应用本工具补丁，自动升级可能替换客户端内容并留下失效的旧签名链。双击入口会使用受限检查识别这一状态，并在最终事务提交时重新建立完整本机签名。它必须同时满足：完整语义能力契约通过、Bundle ID 为 `com.openai.codex`、签名元数据仍指向 OpenAI Team ID `2DC432GLL2` 及官方指定要求、ASAR 头部完整性与 Info.plist 一致、未打补丁的目标分包匹配文件表整体与分块哈希、ASAR 内容完整性 fuse 为关闭，或为开启且目标分包完整性元数据有效、额度组件处于未打补丁状态、所有预期签名目标存在。Fuse 开启时应用会同步更新文件表和 `Info.plist` 哈希；任一条件不符仍会拒绝。
+### 只使用补丁包
 
-先运行：
+纯补丁包为 `codex-quota-card-patcher-26.1007.21159.zip` 及对应 `.zip.sha256`。解压后双击：
 
-```bash
-node bin/patch-codex-quota-card.mjs check
-node bin/patch-codex-quota-card.mjs check --allow-updated-signature
-```
+- `应用企业月额度卡片.command`：介绍修改范围、风险与备份位置，输入 `y` 才执行。
+- `恢复额度卡片备份.command`：选择并校验备份后恢复。
 
-- 如果显示 `ready`，可以再次运行 `apply`。
-- 如果显示 `already-patched`，表示 v8 结构、侧边栏挂载契约、完整性哈希和签名均有效，无需重复应用。
-- 如果报告语义锚点变化，工具会停止；需要先适配新版结构，不能强行执行。
-- 如果显示“版本验证记录：新版本”和“发行兼容：自动验证通过”，表示版本尚未加入真实运行验证记录，但完整静态能力契约和内存预演已经通过。
-- 如果报告语义依赖、目标分包哈希或 Electron fuse 不兼容，工具会停止；不能用版本参数绕过。
-- 默认命令行 `check` 仍会拒绝无效签名。只有确认这是本工具补丁后的自动升级版本时，才使用 `--allow-updated-signature`；输出必须显示“升级后重签资格：符合”。
-- 如果报告“ASAR 头部完整性与 Info.plist 不一致”或“升级后重签资格：不符合”，请重新安装官方客户端后再检查。
+这两个入口不会自动退出或重启客户端，操作前须用 Command+Q 完全退出。整个解压目录可以移动或改名。
 
-## 恢复
-
-最简单的方式是双击 `恢复额度卡片备份.command`，选择本机由此发行包生成的备份并再次确认。
+终端用法：
 
 ```bash
-node bin/patch-codex-quota-card.mjs restore --backup backups/<版本-时间>
-node bin/patch-codex-quota-card.mjs validate-backup --backup backups/<版本-时间>
+node bin/patch-codex-quota-card.mjs check --app /Applications/Codex.app
+node bin/patch-codex-quota-card.mjs apply --app /Applications/Codex.app
 ```
 
-恢复仅接受本工具创建并完整校验通过的 v2 备份。恢复也采用原子事务，失败会回到恢复前状态。它可以恢复文件内容，但不能恢复 OpenAI 官方发布签名；如需官方签名，应重新安装最新版客户端。
+将路径替换为实际客户端位置。双击入口也可通过 `CODEX_PATCH_APP` 指定路径。
 
-## 已知边界
+## 备份与恢复
 
-- 客户端没有公开的侧边栏扩展接口，因此这是生产包补丁，不是 Codex 插件。
-- 更新会替换 `app.asar`，需要重新检查和应用。
-- 临时签名可能使客户端自动更新失败或要求重新安装，不能承诺继续保留官方自动更新能力。
-- 修改后使用的是本机临时签名，不再是 OpenAI 官方发布签名。
-- 本机签名不能继承 OpenAI Team ID 专属的应用组与钥匙串访问组。原有登录状态可能需要重新授权或重新登录；这是签名身份变化，不是额度接口申请权限。
-- 本机临时签名不能使用 Apple Push Notification 推送环境权限，因此不能保证系统推送能力。
-- 工具不自动退出或重启客户端，避免中断正在进行的任务。
-- v1 版备份清单信息不足，v8 会明确拒绝恢复，不会猜测文件身份。
+图形助手的状态、日志和补丁备份位于：
 
-## 分发包
+```text
+~/Library/Application Support/Chatgpt-Quota-Card/user-assistant/
+```
 
-### 开发与候选发行
-
-维护端稳定清单监控入口：
+单独运行补丁时，备份默认放在发行目录的 `backups/`；具体位置以操作输出为准。每份备份包含完整 ASAR，可能占用数百 MiB，请保留至少一份可用备份。
 
 ```bash
-# 只查询，首次发现变化时输出结果；不下载
-node maintainer/watch-client.mjs --app /Applications/ChatGPT.app --state-dir /tmp/quota-watch
-# 下载官方完整 ZIP，解压前验签，再运行不启动应用的隔离验证
-node maintainer/watch-client.mjs --app /Applications/ChatGPT.app --state-dir /tmp/quota-watch --process
+node bin/patch-codex-quota-card.mjs validate-backup --app /Applications/Codex.app --backup /path/to/backup
+node bin/patch-codex-quota-card.mjs restore --app /Applications/Codex.app --backup /path/to/backup
 ```
 
-当前只支持 macOS Apple Silicon，依赖系统 `xmllint`、`ditto`、`codesign` 和 Node.js。入口使用客户端内置的 `https://updates.oaistatic.com/codex/app/appcast`，发送独立随机 installation_id、架构、当前应用版本、系统版本和 `beta=false`，不读取登录凭据。此接口没有公开稳定 API 承诺；它提供的稳定清单可能落后于官网 DMG，监控不会宣称发现全局最新版。首次 `--process` 会验证当前清单最新包，建立基线，并不要求它比本机客户端新。
+只接受本工具生成且完整校验通过的 v2 备份。恢复可以还原文件内容，**不能恢复 OpenAI 官方发布签名**；需要官方签名时请重新安装官方客户端。
 
-监控仅接受官方 HTTPS 域名、适合本机系统的 arm64 稳定完整 ZIP，按数字构建号选取最高条目，拒绝重复最高构建和清单回退。下载完成后核对字节数，使用已核验原厂客户端 `26.1007.21159/build 20052` 中的 `SUPublicEDKey` 对完整 ZIP 做 Ed25519 验签，成功才解压；随后验证 Apple/OpenAI 原厂签名以及包内版本/build 与清单一致。签名机制见 [Sparkle 官方文档](https://sparkle-project.org/documentation/)。公钥轮换必须重新核验官方包，不从清单自动接受新密钥。
+## 安全与限制
 
-状态目录保存 `state.json`、唯一 job 目录、安装包和验证报告。按清单身份及补丁/验证器/监控程序的哈希去重：相同输入不重复下载或验证，工具变化会重新验收。失败或中断不会自动重试；确认原因解决后加 `--process --retry`。互斥锁阻止并行运行，异常退出遗留 `.lock` 时需先确认旧任务已结束再手动移除。状态损坏明确报错，不重置记录。文件、安装包、副本和备份会持续占用磁盘，尚无自动清理。
+本项目修改客户端生产包，应用后使用本机临时签名。当前没有 Apple Developer ID，也未公证，macOS 可能拦截安装器或命令入口。确认来源后按系统提示打开，不要关闭 Gatekeeper。
 
-加 `--notify` 可提交本机系统通知：发现变化、验证完成或新的失败时通知，相同状态和已记录的同一失败保持安静；提交失败会明确输出错误并记录独立的通知状态，结果仍可从终端和文件查看，不把通知失败当作补丁不兼容。系统接收通知也不保证实际显示（可能受系统设置或专注模式影响）。默认只有终端输出，没有安装定时任务。所有验证均不启动应用，不修改正式客户端、不自动调用 AI 或发布；结果仍为人工验收受限的 `partial`。
+- 签名身份改变可能需要重新登录或授权钥匙串；系统推送与官方自动更新能力不能保证保留。
+- SHA-256 和内部清单用于核对完整性，不是独立的维护者发行签名；热更新信任 GitHub HTTPS、仓库及 Release 的控制权限。
+- 用户助手可能需要终端自动化权限。提交启动请求不代表客户端已成功启动或卡片数据显示正确。
+- 未知版本必须通过语义、ASAR、Electron fuse 和签名结构检查；工具不会因版本号相近就强行应用。
+- 临时签名与隔离测试不能替代真实使用验收。完整分发边界见 [NOTICE.md](NOTICE.md)。
 
-维护端可传入从官方获取的完整 `.app`，运行隔离验证：
+## 常见问题
 
-```bash
-node maintainer/validate-client.mjs --app /path/to/ChatGPT.app --output /tmp/quota-validation
-node maintainer/validate-client.mjs --app /path/to/ChatGPT.app --output /tmp/quota-validation --launch
-```
+**检查结果是什么意思？**
 
-入口先验证 Apple 信任链、OpenAI Team ID 和 Bundle ID，只接受原厂未补丁客户端。每次在报告目录生成唯一工作目录，复制后检查、应用补丁、验证备份和全部签名，最后恢复副本并核对源文件未变。不会退出或修改源客户端。失败停止并保留副本、备份、分步日志与 `report.json`，不会自动重试或发布。
+| 状态 | 含义与操作 |
+| --- | --- |
+| `ready` | 当前完整检查通过，可以按提示应用 |
+| `already-patched` | 已安装且补丁契约有效，无需重复应用 |
+| `upgrade-ready` | 已有旧补丁需要升级，可按提示重新应用 |
+| 语义、完整性或签名检查失败 | 停止操作，保留错误信息，等待适配或重新安装官方客户端 |
 
-默认跳过启动，结果为 `partial`。`--launch` 会直接启动副本主程序，指定独立 Electron 用户数据目录，观察 25 秒、检查初始化/FATAL 和路径关联的 AMFI 日志，再停止此次测试进程组。该选项可能弹出应用窗口，且不是完整系统沙盒：原生钥匙串、共享设置和外部服务不保证隔离，建议在专用测试账户或测试机器运行。AMFI 查询失败会导致验证失败；无路径关联拒绝日志也不证明完整运行正常。
+**GitHub 检查失败，能直接用旧补丁吗？**
 
-只有全部自动步骤通过才显示 `automated-passed`；`releaseEligible` 始终为 `false`，卡片布局、真实账户额度及登录交互仍需人工验收。输入当前已打补丁或临时签名的正式客户端会被拒绝，不使用 `--allow-updated-signature` 绕过原厂身份。此隔离入口不下载 DMG、不安装正式客户端；稳定清单发现与 ZIP 下载由 `watch-client.mjs` 负责。
+不能。无权限、网络错误或限流会显示“最新版未知/检查失败”，并暂停应用。确认仓库可访问但尚无稳定 Release 时，可经风险确认检查并应用本机补丁。公开仓库默认匿名检查；私有访问仅可使用接收者自己的已登录 GitHub CLI，不分发维护者凭据。
 
-开发仓库：[Shilem/Chatgpt-Quota-Card](https://github.com/Shilem/Chatgpt-Quota-Card)。目前为私有仓库，普通接收者不能匿名下载其 Release；用户端自动更新尚未实现，不要把维护者 Token 放入发行包。
+**为什么客户端更新后签名不通过？**
 
-维护文件位于 `maintainer/`，GitHub Actions 配置位于 `.github/workflows/verify.yml`，均不进入用户发行包。开发目录运行：
+之前应用过补丁再自动升级，可能留下失效的签名链。`--allow-updated-signature` 仅用于精确识别的这种状态，必须显示“升级后重签资格：符合”；它不是通用签名绕过。资格不符或 ASAR 头部不一致时，请重新安装官方客户端。
 
-```bash
-node bin/verify-release.mjs . --project
-node maintainer/verify-project.mjs
-node maintainer/build-release.mjs /tmp/quota-candidate
-```
+**为什么安装后没有提醒？**
 
-输出目录必须在项目之外，已有同名包不会覆盖。构建器只复制发行白名单文件，通过 macOS `ditto` 打包、重新解压并再次校验，输出 ZIP 和同名 `.sha256`。修改发行文件后必须先同步 `release-manifest.json` 中的大小与 SHA-256；构建器不会自动接受发生变化的文件。
+安装时的客户端版本被记为基线，无变化时保持安静。首次卡片安装请主动选择“应用补丁”，并确认后台提醒已启用。
 
-CI 在 push、pull request 或手动触发时执行发行回归、语法检查和候选打包，上传 `candidate-package` Artifact；不会创建 Release。候选包通过仅证明发行完整性，不证明新版客户端兼容。正式发布还需隔离客户端的补丁、恢复、签名、启动/AMFI 与视觉及真实额度数据验收。
+**为什么没有额度卡片或 Monthly 显示不可用？**
 
-官方稳定清单发现与隔离验证已实现；后续阶段为定时后台检查、有限轮次的 Codex 自动适配、签名发行及用户端稳定更新。当前没有安装后台任务、替换正式客户端或配置自动公开发布。
+卡片仅适用于 ChatGPT 登录方式，且显示依赖客户端原生额度数据。缺失、单位不匹配或无限额度不会伪装成 `0%`；若预期数据与原生 Usage 页面不一致，请提交脱敏问题报告。
 
-项目维护者可生成 `codex-quota-card-patcher-v8.2.3.zip` 和同名 `.sha256` 文件。发行包按精确白名单构建，只包含运行说明、安全声明、应用与恢复入口、共享启动检查、发行完整性检查和补丁主程序，不包含 `backups/`、`.codegraph/`、`.codex/`、`.DS_Store`、Git 数据、测试或个人绝对路径。为支持 Finder 打开后的发行目录和本地开发目录直接运行，完整性校验会忽略根目录中明确命名的普通 `.DS_Store` 文件，以及 `.codegraph/`、`.codex/` 与 `backups/` 普通目录；不会忽略同名符号链接、类型不符或嵌套条目，也不会忽略其他额外内容。
+## 反馈与维护
 
-构建器会使用 macOS `ditto` 重新解压 ZIP，拒绝符号链接和白名单外文件，再逐项校验权限、大小及 SHA-256。启动入口也会对发行文件执行同样的完整性检查。接收者应通过独立可信渠道获得 `.sha256` 内容，并在 ZIP 所在目录运行：
+在 [Issues](https://github.com/Shilem/Chatgpt-Quota-Card/issues) 提交问题时，请说明 macOS 与芯片类型、客户端版本/构建号、助手发行版本和错误阶段。可附相关错误片段或卡片截图；先遮盖邮箱、账户/工作区 ID、Token、真实用量及个人路径，不要上传完整备份或未经检查的日志。
 
-```bash
-shasum -a 256 -c codex-quota-card-patcher-v8.2.3.zip.sha256
-```
-
-内部清单和外部哈希不能替代可信发布者签名。当前没有 Apple Developer ID，因此发行包未公证；完整边界见 `NOTICE.md`。
+- [维护与构建说明](https://github.com/Shilem/Chatgpt-Quota-Card/blob/main/maintainer/README.md)：开发者监控、隔离验证、候选打包与发行验收。
+- [更新记录](https://github.com/Shilem/Chatgpt-Quota-Card/blob/main/maintainer/CHANGELOG.md)：历史适配与修复。
+- [安全及分发声明](NOTICE.md)：临时签名与可信来源边界。

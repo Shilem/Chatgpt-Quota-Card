@@ -9,7 +9,7 @@ cd "$project_dir"
 source "$project_dir/bin/launcher-common.zsh"
 initialize_launcher
 
-print_banner "Codex 侧边栏额度卡片 · v8.2.3"
+print_banner "Codex 侧边栏额度卡片 · $release_version"
 echo
 printf "%s功能介绍%s\n" "$style_bold" "$style_reset"
 printf "  %s✓%s Shopee 企业账户：展示 Monthly 剩余额度和本月用量\n" "$style_green" "$style_reset"
@@ -21,7 +21,7 @@ printf "%s%s风险说明%s\n" "$style_bold" "$style_yellow" "$style_reset"
 printf "  %s!%s 本工具会修改 /Applications/ChatGPT.app，不是官方扩展。\n" "$style_yellow" "$style_reset"
 printf "  %s!%s 修改后使用本机签名，macOS 可能弹出钥匙串授权。\n" "$style_yellow" "$style_reset"
 printf "  %s!%s 客户端更新可能覆盖补丁，需要重新检查和应用。\n" "$style_yellow" "$style_reset"
-printf "  %s!%s 本工具补丁后的客户端自动升级时，旧签名链可能失效；v8.2.3 只在挂载语义、完整性与签名结构均通过后重新签名。\n" "$style_yellow" "$style_reset"
+printf "  %s!%s 本工具补丁后的客户端自动升级时，旧签名链可能失效；只在挂载语义、完整性与签名结构均通过后重新签名。\n" "$style_yellow" "$style_reset"
 printf "  %s!%s 备份不能恢复 OpenAI 官方签名；恢复官方状态需重新安装客户端。\n" "$style_yellow" "$style_reset"
 printf "  %s!%s 执行前请先按 Command+Q 完全退出 Codex App。\n" "$style_yellow" "$style_reset"
 echo

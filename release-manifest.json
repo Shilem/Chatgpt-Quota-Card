@@ -1,5 +1,11 @@
 {
-  "releaseVersion": "v8.2.3",
+  "releaseVersion": "26.1007.21159",
+  "releaseRevision": 1,
+  "targetClient": {
+    "bundleIdentifier": "com.openai.codex",
+    "version": "26.1007.21159",
+    "build": "20052"
+  },
   "patchMarker": "codex-quota-card-patch:v8",
   "platform": "macOS",
   "minimumNodeVersion": "18.15.0",
@@ -7,13 +13,13 @@
   "files": [
     {
       "path": "AGENTS.md",
-      "size": 7346,
-      "sha256": "750f0b01f131130d99a94d83f1567e0fc12cdbd5f20fb558c1314517f4765ada"
+      "size": 9157,
+      "sha256": "d963b39a04cffa188ac886c82b9bf89a9587f7384108e631e6998bc11dbaf781"
     },
     {
       "path": "CLAUDE.md",
-      "size": 1917,
-      "sha256": "62abad0a3c99cd9f40b870b9ba6bef01f3b2034be2038f18667ff13418fd1968"
+      "size": 164,
+      "sha256": "4770c8b17103468d2f6062429c6c0cd0db185d5ef17475a4ddd80809f22a89ff"
     },
     {
       "path": "NOTICE.md",
@@ -22,23 +28,23 @@
     },
     {
       "path": "README.md",
-      "size": 21295,
-      "sha256": "1c91d23bfd53cd462aeff29714cdcd311ce0f9c9cff094fa6e8b9e0bbf84315f"
+      "size": 10079,
+      "sha256": "6990baab39224fa548dc59c584a377daae5e0b0729925b02cf2e3c1b5d05299a"
     },
     {
       "path": "应用企业月额度卡片.command",
-      "size": 3834,
-      "sha256": "e4f5488d54030b9db993ec3818834ca9e14e08483ae6188497f4dcc5b88ae167"
+      "size": 3837,
+      "sha256": "7a5f774d62bca5e6b033d843a604a7ee8ebab9766bcdf20fdd6f46ca6a671b4a"
     },
     {
       "path": "恢复额度卡片备份.command",
-      "size": 3773,
-      "sha256": "93a75fd3414ee082ae8577a52e4ae12c4d094f93aba989d999b9ddae2493fbff"
+      "size": 3783,
+      "sha256": "0d3aa9baf50695c2158f7f856c7a81b6d8b7030ba2c972c28f08cea960803372"
     },
     {
       "path": "bin/launcher-common.zsh",
-      "size": 3571,
-      "sha256": "895437513d844db845a9bb7a2f957bf196ee36264a1dbdf861dd779bd0c3aba1"
+      "size": 3778,
+      "sha256": "04548b50ad09a7daf908840a97dac393b8cc405aba1f8cab094011bdb33c7514"
     },
     {
       "path": "bin/patch-codex-quota-card.mjs",
@@ -47,8 +53,13 @@
     },
     {
       "path": "bin/verify-release.mjs",
-      "size": 4128,
-      "sha256": "a0ecd291a842c1a5bddee4110c036589d3f41038dd2d99e1127484a90fa6670a"
+      "size": 4518,
+      "sha256": "7c318ec3e23979a2855cfe5777422e15888409916db2f6bc7ba29a71c26ff7be"
+    },
+    {
+      "path": "bin/user-assistant.mjs",
+      "size": 36474,
+      "sha256": "22ea64cd94ce41a96e56ae9c50dbb43c5cd2d28eaa6332b410229691c20da3f9"
     }
   ]
 }

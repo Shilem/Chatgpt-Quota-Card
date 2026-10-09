@@ -1,10 +1,42 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
-import { mkdtemp, mkdir, symlink, stat, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, symlink, stat, rm, writeFile, readFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { compareVersions, assertOfficialUrl, parseFeed, verifyArchive, candidateKey, shouldProcess, parseWatchOptions, watchClient } from './watch-client.mjs';
+import { compareVersions, assertOfficialUrl, parseFeed, verifyArchive, candidateKey, shouldProcess, parseWatchOptions, watchClient, pruneArtifacts } from './watch-client.mjs';
+
+test('保留最近三次完整材料，旧任务保留报告日志，不删除运行中任务', async () => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'quota-retention-')));
+  try {
+    const records = {};
+    for (let i = 0; i < 5; i++) {
+      const job = join(directory, `job-test${i}`), validation = join(job, 'validation/validation-test');
+      await mkdir(join(validation, 'Client.app'), { recursive: true });
+      await mkdir(join(job, 'official'));
+      await writeFile(join(job, 'client.zip'), 'archive');
+      await writeFile(join(validation, 'report.json'), 'report');
+      await writeFile(join(validation, 'steps.log'), 'log');
+      records[i] = { job, status: i === 4 ? 'running' : 'partial', finishedAt: `2026-10-0${i + 1}` };
+    }
+    await pruneArtifacts(directory, { records });
+    await assert.rejects(stat(join(records[0].job, 'client.zip')), { code: 'ENOENT' });
+    assert.equal(await readFile(join(records[0].job, 'validation/validation-test/report.json'), 'utf8'), 'report');
+    assert.equal(await readFile(join(records[0].job, 'validation/validation-test/steps.log'), 'utf8'), 'log');
+    for (let i = 1; i < 5; i++) assert.ok((await stat(join(records[i].job, 'client.zip'))).isFile());
+    await pruneArtifacts(directory, { records });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+test('清理拒绝外部路径和符号链接任务，外部文件不变', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'quota-retention-boundary-'));
+  try {
+    const external = join(directory, 'outside'), stateDir = join(directory, 'state');
+    await mkdir(external); await mkdir(stateDir); await writeFile(join(external, 'client.zip'), 'keep');
+    const alias = join(stateDir, 'job-alias'); await symlink(external, alias);
+    for (const job of [external, alias]) await assert.rejects(pruneArtifacts(stateDir, { records: { old: { job, status: 'partial', finishedAt: '2026-01-01' } } }, 0), /任务路径/);
+    assert.equal(await readFile(join(external, 'client.zip'), 'utf8'), 'keep');
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
 
 test('监控通过符号链接指向源目录时拒绝且不创建状态目录', { skip: process.platform !== 'darwin' || process.arch !== 'arm64' }, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'quota-watch-path-test-'));

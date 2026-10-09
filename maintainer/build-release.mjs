@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile, lstat } from 'node:fs/promises';
 import { dirname, join, resolve, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { verifyMonitorInstaller } from './verify-monitor-installer.mjs';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 export async function stageRelease(destination) {
-  execFileSync(process.execPath, [join(ROOT, 'bin/verify-release.mjs'), ROOT, '--project'], { stdio: 'inherit' });
+  let installer = false;
+  try { await lstat(join(ROOT, 'monitor-manifest.json')); installer = true; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (installer) await verifyMonitorInstaller(ROOT);
+  else execFileSync(process.execPath, [join(ROOT, 'bin/verify-release.mjs'), ROOT, '--project'], { stdio: 'inherit' });
   const manifest = JSON.parse(await readFile(join(ROOT, 'release-manifest.json'), 'utf8'));
   await mkdir(destination, { recursive: true });
   for (const entry of [...manifest.files, { path: 'release-manifest.json' }]) {

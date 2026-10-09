@@ -37,7 +37,7 @@ try {
     verify(1, /文件集合不匹配/);
     await rm(join(staged, name));
   }
-  for (const name of ['.git', '.github', 'maintainer']) {
+  for (const name of ['.git', '.github', 'maintainer', 'dist']) {
     await mkdir(join(staged, name));
     verify(1, /未知目录/);
     verify(0, null, true);

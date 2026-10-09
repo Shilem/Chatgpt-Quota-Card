@@ -16,13 +16,17 @@ jobs:
       - name: 发行边界回归
         run: node maintainer/verify-project.mjs
       - name: 客户端验收入口回归
-        run: node --test maintainer/validate-client.test.mjs maintainer/watch-client.test.mjs
+        run: node --test maintainer/validate-client.test.mjs maintainer/watch-client.test.mjs maintainer/monitor-ui.test.mjs maintainer/verify-monitor-installer.test.mjs maintainer/user-assistant.test.mjs
       - name: 语法检查
         run: |
           node --check bin/patch-codex-quota-card.mjs
           zsh -n 应用企业月额度卡片.command 恢复额度卡片备份.command bin/launcher-common.zsh
       - name: 构建并重新解压验证
         run: node maintainer/build-release.mjs "$RUNNER_TEMP/candidate"
+      - name: 构建图形监控安装器
+        run: node maintainer/build-monitor-installer.mjs "$RUNNER_TEMP/candidate"
+      - name: 构建普通用户助手
+        run: node maintainer/build-monitor-installer.mjs "$RUNNER_TEMP/candidate" user
       - uses: actions/upload-artifact@v4
         with:
           name: candidate-package

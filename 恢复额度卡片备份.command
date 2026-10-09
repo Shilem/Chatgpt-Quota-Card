@@ -9,7 +9,7 @@ cd "$project_dir"
 source "$project_dir/bin/launcher-common.zsh"
 initialize_launcher
 
-print_banner "Codex 额度卡片备份恢复 · v8.2.3"
+print_banner "Codex 额度卡片备份恢复 · $release_version"
 echo
 printf "%s恢复说明%s\n" "$style_bold" "$style_reset"
 printf "  %s✓%s 仅接受本工具生成且完整校验通过的 v2 备份\n" "$style_green" "$style_reset"

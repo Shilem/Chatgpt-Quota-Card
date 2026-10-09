@@ -14,12 +14,13 @@ const REQUIRED_FILES = [
   "bin/launcher-common.zsh",
   "bin/patch-codex-quota-card.mjs",
   "bin/verify-release.mjs",
+  "bin/user-assistant.mjs",
 ].sort();
 const ALLOWED_ROOT_FILES = [...REQUIRED_FILES, "release-manifest.json"].sort();
 const ALLOWED_RELEASE_DIRECTORIES = new Set(["bin"]);
 const IGNORED_ROOT_DIRECTORIES = new Set([".codegraph", ".codex", ".projectmem", "backups"]);
 const IGNORED_ROOT_FILES = new Set([".DS_Store", ".gitignore"]);
-const PROJECT_DIRECTORIES = new Set([".git", ".github", "maintainer"]);
+const PROJECT_DIRECTORIES = new Set([".git", ".github", "maintainer", "dist"]);
 const projectMode = process.argv[3] === "--project";
 
 function fail(message) {
@@ -60,7 +61,8 @@ try {
   if (process.argv.length > 4 || (process.argv[3] && !projectMode)) fail("未知校验参数");
   const manifestPath = join(root, "release-manifest.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-  if (manifest.releaseVersion !== "v8.2.3" || manifest.patchMarker !== "codex-quota-card-patch:v8") fail("发行清单版本无效");
+  if (!/^\d+\.\d+\.\d+$/.test(manifest.releaseVersion) || manifest.patchMarker !== "codex-quota-card-patch:v8" || !Number.isSafeInteger(manifest.releaseRevision) || manifest.releaseRevision < 1) fail("发行清单版本或内部修订号无效");
+  if (manifest.targetClient?.bundleIdentifier !== "com.openai.codex" || manifest.targetClient.version !== manifest.releaseVersion || !/^\d+$/.test(manifest.targetClient.build)) fail("发行版号必须与目标官方客户端版本一致");
   if (!Array.isArray(manifest.files)) fail("发行清单缺少文件列表");
   const listed = manifest.files.map((entry) => entry.path).sort();
   if (JSON.stringify(listed) !== JSON.stringify(REQUIRED_FILES)) fail("发行清单文件白名单不完整或包含额外条目");

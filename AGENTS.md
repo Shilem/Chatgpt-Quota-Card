@@ -21,7 +21,11 @@ codesign --verify --deep --strict --verbose=4 /Applications/ChatGPT.app
 ## 架构与命名
 
 - 双击入口只负责交互与环境预检；补丁、备份、恢复和签名事务统一放在 `bin/patch-codex-quota-card.mjs`。
+- `bin/user-assistant.mjs` 是普通用户的本机更新提醒和批准后退出/补丁/复查/启动编排，不下载官方客户端或执行开发者隔离验证。退出前必须兼容检查及明确确认，变化竞态、退出失败、应用失败或复查失败均不得继续或自动启动；不得强制终止客户端。实际客户端写入继续由主补丁事务负责。
+- 助手在稳定观察客户端变化后与补丁前先查询固定GitHub仓库稳定Release；用户已授权助手无升级询问地热更新。下载SHA-256与纯发行ZIP、精确白名单/归档类型/全部哈希/发行版本/自检通过后才原子切换独立runtime配置，保留旧版与备份。图形入口和后台服务读取配置分派，旧进程不得继续应用补丁；访问或更新失败必须显示错误并暂停，不得把私有仓库404当作无Release或最新。不内嵌维护者凭据，私有访问仅使用用户显式选择的本机gh登录。
 - `check`、`apply`、`restore`、`validate-backup` 的状态名和中文错误信息属于稳定接口，不得静默改变语义。
+- 发行版本直接跟随已核验的官方 `com.openai.codex` 稳定客户端版本，`release-manifest.json` 的 `releaseVersion`、`targetClient.version`、Release tag及资产名必须一致。内部 `releaseRevision` 支持同官方版本修订，必须递增；不得改动独立的v8补丁语义标记或以版号替代兼容检查。横幅和安装器从清单读取版本，不再硬编码当前发行号。
+- 公开仓库及发行文件不得包含个人绝对路径、本机Projectmem项目ID、账户数据、运行日志或凭据；仅在被Git忽略的本机元数据中保存。公开历史中的隐私清理或改写必须单独授权，不得擅自强推。
 - 文件路径常量使用全大写名称；纯检查函数使用 `assert`、`inspect`、`validate` 前缀；产生写入的函数使用 `create`、`patch`、`sign`、`restore` 前缀。
 
 ## 操作与安全
@@ -53,12 +57,11 @@ codesign --verify --deep --strict --verbose=4 /Applications/ChatGPT.app
 - 发行运行文件采用精确白名单。新增或删除运行文件必须同步更新 `bin/verify-release.mjs` 和 `release-manifest.json`，不得绕过完整性校验。
 - 根目录的 `backups/`、`.codegraph/`、`.codex/`、`.projectmem/` 是明确允许但不参与发行哈希的本地数据目录；根目录普通文件 `.DS_Store` 和 `.gitignore` 是明确允许但不参与发行哈希的本地元数据文件。
 - 校验器只能按精确根目录名称和条目类型忽略上述对象；同名符号链接、普通文件、嵌套条目及其他额外内容必须拒绝。
+- 显式 `--project` 额外允许根目录 `.git/`、`.github/`、`maintainer/` 和 `dist/` 的真实目录，`dist/` 存放开发候选产物；严格用户发行模式继续拒绝它们。普通用户助手安装器只含发行运行文件与安装校验器，不得混入开发者清单下载/隔离验证程序。
 - 完成修改后，更新发行清单中每个文件的字节数与 SHA-256，并分别验证：含允许本地元数据的项目根目录、不含本地元数据的纯发行目录，以及同名类型不符、嵌套条目和未知内容的拒绝用例。
 
-<!-- >>> projectmem codex bridge >>> -->
 ## Projectmem
 
-Use the global `pjm-mcp-global` server for Projectmem. Pass this exact `project_id` to every project-scoped tool: `proj_0f5a65deb7b0425889ea08889c0eb3b6`. Do not bind `--root` or infer a project from CWD.
+使用本机配置的 Projectmem 服务。明确选择已注册的项目后，每次项目级工具调用都传入同一个显式 `project_id`；不得根据CWD猜测项目。项目ID保存在本机配置或会话指令中，不写入公开仓库或发行包。
 
-Before the first substantive project task in a new or resumed agent session, call `get_instructions(project_id)`, then `get_summary(project_id)`. Do not repeat them in an unchanged conversation; refresh after context recovery, task switching, or when the project state may have changed. Before editing a file call `precheck_file(project_id, path)`.
-<!-- <<< projectmem codex bridge <<< -->
+新会话或恢复后先调用 `get_instructions(project_id)`、`get_summary(project_id)`，按需读取项目地图及计划；项目状态未变时不重复读取。修改前调用 `precheck_file(project_id, path)`。
