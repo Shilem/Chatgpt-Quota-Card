@@ -20,6 +20,25 @@ node maintainer/review-amfi.mjs "<验证目录>/report.json" "<新补验报告.j
 
 工具使用原客户端路径和原启动时间窗口查询日志，校验启动日志摘要与其他步骤，拒绝AMFI约束/拒绝记录。补验报告记录原报告SHA-256，原报告保持不变；仍须人工验收卡片、登录、交互和真实额度。旧报告没有独立启动证据时须重新测试，不能补填通过。
 
+## 高级操作与用户助手实现
+
+工具发行版本跟随官方客户端版本，当前build为 `20052`、`releaseRevision=4`，补丁结构标记仍为v8。内部修订用于同官方版本的热更新比较，不能替代语义兼容检查。独立补丁命令要求Node.js 18.15+；图形安装器及助手要求arm64 Node.js 22+，支持标准安装和当前用户NVM目录。
+
+```bash
+node bin/patch-codex-quota-card.mjs check --app /Applications/Codex.app
+node bin/patch-codex-quota-card.mjs apply --app /Applications/Codex.app
+node bin/patch-codex-quota-card.mjs validate-backup --app /Applications/Codex.app --backup /path/to/backup
+node bin/patch-codex-quota-card.mjs restore --app /Applications/Codex.app --backup /path/to/backup
+```
+
+使用实际客户端路径；双击入口可通过 `CODEX_PATCH_APP` 指定路径。纯补丁包中的应用和恢复入口不会自动退出或重启客户端，操作前须完全退出。
+
+用户助手每5分钟观察客户端，变化连续观察两次且至少间隔一分钟后查询固定仓库的稳定Release。下载检查来源、SHA-256、归档路径/类型、精确运行文件白名单、清单版本及自检，再原子切换运行目录。拒绝已建立基线后的同修订资产替换或修订回退；失败保留旧运行目录并暂停应用。待处理变化每小时复查GitHub，支持手动立即检查。公开仓库匿名查询；私有访问仅使用接收者自己的已登录GitHub CLI，不分发维护者凭据。
+
+未知客户端须通过语义、ASAR、Electron fuse及签名结构检查。`--allow-updated-signature`只接受精确识别的补丁后自动升级状态，必须显示“升级后重签资格：符合”，不是通用签名绕过。只接受完整校验通过的本工具v2备份。
+
+企业Monthly读取额度状态的 `plan_type`，复用原生企业判定，并向同一 `account_id` 查询；旧邮箱判断v8进入 `upgrade-ready`。依赖、判定、查询及渲染契约的工程要求见根目录AGENTS.md。
+
 ## 官方稳定清单监控
 
 `watch-client.mjs` 查询 Codex 内置的 appcast：
