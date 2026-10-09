@@ -15,6 +15,8 @@ jobs:
           node-version: '22'
       - name: 发行边界回归
         run: node maintainer/verify-project.mjs
+      - name: 客户端验收入口回归
+        run: node --test maintainer/validate-client.test.mjs maintainer/watch-client.test.mjs
       - name: 语法检查
         run: |
           node --check bin/patch-codex-quota-card.mjs

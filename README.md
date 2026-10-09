@@ -134,6 +134,36 @@ node bin/patch-codex-quota-card.mjs validate-backup --backup backups/<版本-时
 
 ### 开发与候选发行
 
+维护端稳定清单监控入口：
+
+```bash
+# 只查询，首次发现变化时输出结果；不下载
+node maintainer/watch-client.mjs --app /Applications/ChatGPT.app --state-dir /tmp/quota-watch
+# 下载官方完整 ZIP，解压前验签，再运行不启动应用的隔离验证
+node maintainer/watch-client.mjs --app /Applications/ChatGPT.app --state-dir /tmp/quota-watch --process
+```
+
+当前只支持 macOS Apple Silicon，依赖系统 `xmllint`、`ditto`、`codesign` 和 Node.js。入口使用客户端内置的 `https://updates.oaistatic.com/codex/app/appcast`，发送独立随机 installation_id、架构、当前应用版本、系统版本和 `beta=false`，不读取登录凭据。此接口没有公开稳定 API 承诺；它提供的稳定清单可能落后于官网 DMG，监控不会宣称发现全局最新版。首次 `--process` 会验证当前清单最新包，建立基线，并不要求它比本机客户端新。
+
+监控仅接受官方 HTTPS 域名、适合本机系统的 arm64 稳定完整 ZIP，按数字构建号选取最高条目，拒绝重复最高构建和清单回退。下载完成后核对字节数，使用已核验原厂客户端 `26.1007.21159/build 20052` 中的 `SUPublicEDKey` 对完整 ZIP 做 Ed25519 验签，成功才解压；随后验证 Apple/OpenAI 原厂签名以及包内版本/build 与清单一致。签名机制见 [Sparkle 官方文档](https://sparkle-project.org/documentation/)。公钥轮换必须重新核验官方包，不从清单自动接受新密钥。
+
+状态目录保存 `state.json`、唯一 job 目录、安装包和验证报告。按清单身份及补丁/验证器/监控程序的哈希去重：相同输入不重复下载或验证，工具变化会重新验收。失败或中断不会自动重试；确认原因解决后加 `--process --retry`。互斥锁阻止并行运行，异常退出遗留 `.lock` 时需先确认旧任务已结束再手动移除。状态损坏明确报错，不重置记录。文件、安装包、副本和备份会持续占用磁盘，尚无自动清理。
+
+加 `--notify` 可提交本机系统通知：发现变化、验证完成或新的失败时通知，相同状态和已记录的同一失败保持安静；提交失败会明确输出错误并记录独立的通知状态，结果仍可从终端和文件查看，不把通知失败当作补丁不兼容。系统接收通知也不保证实际显示（可能受系统设置或专注模式影响）。默认只有终端输出，没有安装定时任务。所有验证均不启动应用，不修改正式客户端、不自动调用 AI 或发布；结果仍为人工验收受限的 `partial`。
+
+维护端可传入从官方获取的完整 `.app`，运行隔离验证：
+
+```bash
+node maintainer/validate-client.mjs --app /path/to/ChatGPT.app --output /tmp/quota-validation
+node maintainer/validate-client.mjs --app /path/to/ChatGPT.app --output /tmp/quota-validation --launch
+```
+
+入口先验证 Apple 信任链、OpenAI Team ID 和 Bundle ID，只接受原厂未补丁客户端。每次在报告目录生成唯一工作目录，复制后检查、应用补丁、验证备份和全部签名，最后恢复副本并核对源文件未变。不会退出或修改源客户端。失败停止并保留副本、备份、分步日志与 `report.json`，不会自动重试或发布。
+
+默认跳过启动，结果为 `partial`。`--launch` 会直接启动副本主程序，指定独立 Electron 用户数据目录，观察 25 秒、检查初始化/FATAL 和路径关联的 AMFI 日志，再停止此次测试进程组。该选项可能弹出应用窗口，且不是完整系统沙盒：原生钥匙串、共享设置和外部服务不保证隔离，建议在专用测试账户或测试机器运行。AMFI 查询失败会导致验证失败；无路径关联拒绝日志也不证明完整运行正常。
+
+只有全部自动步骤通过才显示 `automated-passed`；`releaseEligible` 始终为 `false`，卡片布局、真实账户额度及登录交互仍需人工验收。输入当前已打补丁或临时签名的正式客户端会被拒绝，不使用 `--allow-updated-signature` 绕过原厂身份。此隔离入口不下载 DMG、不安装正式客户端；稳定清单发现与 ZIP 下载由 `watch-client.mjs` 负责。
+
 开发仓库：[Shilem/Chatgpt-Quota-Card](https://github.com/Shilem/Chatgpt-Quota-Card)。目前为私有仓库，普通接收者不能匿名下载其 Release；用户端自动更新尚未实现，不要把维护者 Token 放入发行包。
 
 维护文件位于 `maintainer/`，GitHub Actions 配置位于 `.github/workflows/verify.yml`，均不进入用户发行包。开发目录运行：
@@ -148,7 +178,7 @@ node maintainer/build-release.mjs /tmp/quota-candidate
 
 CI 在 push、pull request 或手动触发时执行发行回归、语法检查和候选打包，上传 `candidate-package` Artifact；不会创建 Release。候选包通过仅证明发行完整性，不证明新版客户端兼容。正式发布还需隔离客户端的补丁、恢复、签名、启动/AMFI 与视觉及真实额度数据验收。
 
-后续阶段为官方新版发现、隔离验证、有限轮次的 Codex 自动适配、签名发行及用户端稳定更新。当前没有安装后台任务、替换正式客户端或配置自动公开发布。
+官方稳定清单发现与隔离验证已实现；后续阶段为定时后台检查、有限轮次的 Codex 自动适配、签名发行及用户端稳定更新。当前没有安装后台任务、替换正式客户端或配置自动公开发布。
 
 项目维护者可生成 `codex-quota-card-patcher-v8.2.3.zip` 和同名 `.sha256` 文件。发行包按精确白名单构建，只包含运行说明、安全声明、应用与恢复入口、共享启动检查、发行完整性检查和补丁主程序，不包含 `backups/`、`.codegraph/`、`.codex/`、`.DS_Store`、Git 数据、测试或个人绝对路径。为支持 Finder 打开后的发行目录和本地开发目录直接运行，完整性校验会忽略根目录中明确命名的普通 `.DS_Store` 文件，以及 `.codegraph/`、`.codex/` 与 `backups/` 普通目录；不会忽略同名符号链接、类型不符或嵌套条目，也不会忽略其他额外内容。
 

@@ -7,8 +7,8 @@
   "files": [
     {
       "path": "AGENTS.md",
-      "size": 6590,
-      "sha256": "4a711194469fd2c810f2276ead267374ff9e1a9a7fc1038bf2a50a4f8d77ae09"
+      "size": 7346,
+      "sha256": "750f0b01f131130d99a94d83f1567e0fc12cdbd5f20fb558c1314517f4765ada"
     },
     {
       "path": "CLAUDE.md",
@@ -22,8 +22,8 @@
     },
     {
       "path": "README.md",
-      "size": 16999,
-      "sha256": "f2ee2d7bea17daca341e5bf8fe3f4d0db530ba5fb73d94c3065d6d3da435b04e"
+      "size": 21295,
+      "sha256": "1c91d23bfd53cd462aeff29714cdcd311ce0f9c9cff094fa6e8b9e0bbf84315f"
     },
     {
       "path": "应用企业月额度卡片.command",
