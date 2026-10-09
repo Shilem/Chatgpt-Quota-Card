@@ -6,11 +6,11 @@
 
 > **适用客户端：** Bundle ID 为 `com.openai.codex` 的 Codex。部分安装沿用 `ChatGPT.app` 名称；普通 ChatGPT 聊天客户端不在支持范围内。
 >
-> **当前状态：** 仓库已公开，尚未发布稳定 Release。当前候选包收到用户使用正常的反馈；启动期 AMFI（macOS 执行安全检查）、视觉和真实额度数据验收仍未完整完成。
+> **当前状态：** `26.1007.21159` 修订4已完成自动检查、专用账户启动及 AMFI（macOS 执行安全检查）补验，并经用户确认卡片、真实额度与登录交互人工验收通过。该结论仅针对当前已验收版本。
 
 ## 功能
 
-- **侧边栏额度卡片：** `@shopee.com` 企业账户显示 Monthly 剩余额度、本月已用量与总额度；其他账户显示 5h、Weekly 剩余额度和重置时间。
+- **侧边栏额度卡片：** 客户端原生判定为企业类别的账户显示 Monthly 剩余额度、本月已用量与总额度，不限制邮箱域名；其他账户显示 5h、Weekly 剩余额度和重置时间。
 - **复用原生数据：** 仅在 ChatGPT 登录方式下显示，使用客户端已有额度状态与 Usage 月额度查询；Monthly 按一分钟周期刷新。
 - **图形更新助手：** 查看状态、启停提醒、应用补丁、打开日志与备份，无需手动输入监控命令。
 - **助手热更新：** 检测本机客户端变化后，先检查固定 GitHub 仓库的稳定 Release，校验通过后自动切换助手运行文件。
@@ -36,7 +36,7 @@
 | --- | --- |
 | 工具发行版本 / 目标官方版本 | `26.1007.21159` |
 | 对应官方构建号 | `20052` |
-| 同版本补丁修订 | `releaseRevision: 1` |
+| 同版本补丁修订 | `releaseRevision: 4` |
 | 内部补丁结构标记 | `v8` |
 
 公开版本号、Release tag、ZIP 文件名和安装器版本跟随官方客户端；同一官方版本的补丁改进由 `releaseRevision` 区分。版本号用于记录验证对象，兼容性仍由实际结构、完整性和签名检查决定。
@@ -45,14 +45,14 @@
 
 ### 图形助手
 
-稳定版发布后，从 [GitHub Releases](https://github.com/Shilem/Chatgpt-Quota-Card/releases) 下载用户安装器及校验文件：
+从 [GitHub Releases](https://github.com/Shilem/Chatgpt-Quota-Card/releases) 下载稳定版用户安装器及校验文件：
 
 ```text
 quota-user-assistant-installer-26.1007.21159-arm64.zip
 quota-user-assistant-installer-26.1007.21159-arm64.zip.sha256
 ```
 
-目前 Releases 为空，请勿把源码 ZIP 当作图形安装器。维护者可按[维护说明](https://github.com/Shilem/Chatgpt-Quota-Card/blob/main/maintainer/README.md)构建候选包；[Actions](https://github.com/Shilem/Chatgpt-Quota-Card/actions/workflows/verify.yml) 的 `candidate-package` 也是候选材料。
+请下载上面列出的资产，源码 ZIP 不是图形安装器。[Actions](https://github.com/Shilem/Chatgpt-Quota-Card/actions/workflows/verify.yml) 的 `candidate-package` 仍是候选材料，不能替代稳定 Release。
 
 1. 确认下载来源，在 ZIP 所在目录核对 SHA-256：
    ```bash
@@ -149,7 +149,7 @@ node bin/patch-codex-quota-card.mjs restore --app /Applications/Codex.app --back
 
 **为什么没有额度卡片或 Monthly 显示不可用？**
 
-卡片仅适用于 ChatGPT 登录方式，且显示依赖客户端原生额度数据。缺失、单位不匹配或无限额度不会伪装成 `0%`；若预期数据与原生 Usage 页面不一致，请提交脱敏问题报告。
+卡片仅适用于 ChatGPT 登录方式，且显示依赖客户端原生额度数据。企业分类复用原生套餐判定，包含 Enterprise、部分 Business 和教育套餐；不会因为使用公司邮箱就认定为企业账户，也不会将所有付费或 Team 套餐都当作企业类别。读取当前额度状态的 `plan_type`，并向同一 `account_id` 查询 Monthly。月额度接口不可用、缺失、单位不匹配或无限额度不会伪装成 `0%`；若预期数据与原生 Usage 页面不一致，请提交脱敏问题报告。旧邮箱判断版 v8 会显示 `upgrade-ready`，需要重新应用补丁才生效。
 
 ## 反馈与维护
 

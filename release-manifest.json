@@ -1,6 +1,6 @@
 {
   "releaseVersion": "26.1007.21159",
-  "releaseRevision": 1,
+  "releaseRevision": 4,
   "targetClient": {
     "bundleIdentifier": "com.openai.codex",
     "version": "26.1007.21159",
@@ -13,8 +13,8 @@
   "files": [
     {
       "path": "AGENTS.md",
-      "size": 9157,
-      "sha256": "d963b39a04cffa188ac886c82b9bf89a9587f7384108e631e6998bc11dbaf781"
+      "size": 9793,
+      "sha256": "42c98daf5af8154301bef405c7cc66a716633a037c896c18b645842b51c61c7d"
     },
     {
       "path": "CLAUDE.md",
@@ -28,13 +28,13 @@
     },
     {
       "path": "README.md",
-      "size": 10079,
-      "sha256": "6990baab39224fa548dc59c584a377daae5e0b0729925b02cf2e3c1b5d05299a"
+      "size": 10455,
+      "sha256": "6b6db33a21fa4a58b45994e903ef78002882edf7f1a1c46904f80611d3a8578d"
     },
     {
       "path": "应用企业月额度卡片.command",
-      "size": 3837,
-      "sha256": "7a5f774d62bca5e6b033d843a604a7ee8ebab9766bcdf20fdd6f46ca6a671b4a"
+      "size": 3863,
+      "sha256": "471bbbc05082049caa6619d0b7f93288326c9030ed04fc1a8d4bb31d8f6747b9"
     },
     {
       "path": "恢复额度卡片备份.command",
@@ -48,8 +48,8 @@
     },
     {
       "path": "bin/patch-codex-quota-card.mjs",
-      "size": 80250,
-      "sha256": "9b858a4accf0824b897ac678a60b004f6e313f89288a4cdc93d15e4c8891e94c"
+      "size": 84208,
+      "sha256": "c7c3dbf2c175786c6a2c632bdf697f4862df61ad7d726719ec5b2552f7dac75f"
     },
     {
       "path": "bin/verify-release.mjs",

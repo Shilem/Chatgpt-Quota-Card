@@ -2,7 +2,7 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, rmSync } from "node:fs";
 import {
   copyFile,
   chmod,
@@ -35,6 +35,7 @@ export const MANIFEST_VERSION = 2;
 const TOOL_NAME = "codex-quota-card-patcher";
 const COLLAPSED_MOUNT_MARKER = "codex-quota-card-collapsed-disabled";
 const MONTHLY_LIMIT_MARKER = "codex-quota-monthly-limit:v2";
+const ENTERPRISE_PLAN_MARKER = "codex-quota-enterprise-plan:v1";
 const DEFAULT_APP = "/Applications/ChatGPT.app";
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = dirname(SCRIPT_DIR);
@@ -56,6 +57,7 @@ const DISK_SAFETY_BYTES = 64 * 1024 * 1024;
 const RESTRICTED_ADHOC_ENTITLEMENTS = [
   "com.apple.application-identifier",
   "com.apple.developer.aps-environment",
+  "com.apple.developer.usernotifications.communication",
   "com.apple.developer.team-identifier",
   "com.apple.security.application-groups",
   "keychain-access-groups",
@@ -86,6 +88,23 @@ const CONTAINER_SIGNING_TARGETS = [
   "Contents/Frameworks/Sparkle.framework",
   "Contents/PlugIns/CodexDockTilePlugin.docktileplugin",
 ];
+const NATIVE_LIBRARY_SIGNING_TARGETS = [
+  "Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+  "Contents/Resources/app.asar.unpacked/node_modules/objc-js/prebuilds/darwin-arm64/node.napi.armv8.node",
+  "Contents/Resources/native/sky.node",
+  "Contents/Resources/native/browser-use-peer-authorization.node",
+  "Contents/Resources/native/usb_webauthn.node",
+];
+
+export function inspectNativeSigningTargets(appPath) {
+  return NATIVE_LIBRARY_SIGNING_TARGETS.filter(relative => {
+    const target = join(appPath, relative);
+    let stat;
+    try { stat = lstatSync(target); } catch (error) { if (error.code === "ENOENT") return false; throw error; }
+    if (!stat.isFile()) fail(`原生库签名目标不是普通文件：${relative}`);
+    return true;
+  });
+}
 
 function fail(message) {
   throw new Error(message);
@@ -530,6 +549,30 @@ function findImportedUsageWindowMapper(source, component, dataValues, { sourcePa
   return mappers[0] ?? null;
 }
 
+function findEnterprisePlanPredicate(source, { sourcePath = null, moduleSources = new Map() } = {}) {
+  const candidates = [];
+  for (const imported of findMatches(source, /import\{([^}]*)\}from"([^"]+)";/g)) {
+    const module = moduleSources.get(resolveAsarModulePath(sourcePath, imported[2]));
+    if (!module) continue;
+    const exports = findMatches(module.text, /export\{([^}]*)\}/g).flatMap(match => importedBindings(match[1]));
+    for (const match of findMatches(module.text, /function ([A-Za-z_$][\w$]*)\(([A-Za-z_$][\w$]*)\)\{return \2!=null&&([A-Za-z_$][\w$]*)\.includes\(\2\)\}/g)) {
+      const lists = findMatches(module.text, new RegExp(`${escapeRegExp(match[3])}=\\[([^\\]]*)\\]`, "g"));
+      if (lists.length !== 1) continue;
+      const literal = lists[0][1];
+      if (!/^[`"'][A-Za-z0-9_]+[`"'](?:,[`"'][A-Za-z0-9_]+[`"'])*$/.test(literal)) continue;
+      const plans = literal.split(",").map(value => value.slice(1, -1));
+      // Identify the native managed-enterprise family, not a generic paid-plan list.
+      if (!["enterprise", "business", "edu"].every(plan => plans.includes(plan))
+        || ["free", "plus", "pro", "team"].some(plan => plans.includes(plan))) continue;
+      const names = exports.filter(binding => binding.imported === match[1]).map(binding => binding.local);
+      for (const binding of importedBindings(imported[1])) {
+        if (names.includes(binding.imported)) candidates.push(binding.local);
+      }
+    }
+  }
+  return exactlyOne(candidates, "原生企业账户套餐判定能力");
+}
+
 function findMonthlyProvider(source, context = {}) {
   const providers = [
     findImportedMonthlyProvider(source, context),
@@ -577,6 +620,7 @@ export function analyzeSource(source, context = {}) {
     ? extractOne(source, /([A-Za-z_$][\w$]*)\(\{entry:[^,}]+,keyPrefix:/g, "额度窗口映射函数")
     : null;
   const monthlyProvider = findMonthlyProvider(source, context);
+  const enterprisePlanPredicate = findEnterprisePlanPredicate(source, context);
   const monthlyImport = monthlyProvider.kind === "import" ? monthlyProvider : null;
   if (monthlyImport?.aliasCount > 1) fail("月额度 Hook 导入重复");
   if (monthlyImport && (isCurrent || LEGACY_PATCH_MARKERS.slice(2).includes(marker)) && monthlyImport.aliasCount !== 1) {
@@ -584,7 +628,6 @@ export function analyzeSource(source, context = {}) {
   }
   if (isCurrent) {
     const requiredSemantics = [
-      ["@shopee.com", "企业邮箱域名"],
       ["effective_monthly_limit", "Monthly 总额度字段"],
       ["current_month_usage", "Monthly 已用额度字段"],
       ["`Monthly`", "Monthly 标签"],
@@ -597,6 +640,11 @@ export function analyzeSource(source, context = {}) {
     for (const [needle, label] of requiredSemantics) {
       if (count(component.text, needle) !== 1) fail(`v8 ${label}应恰好出现 1 次，实际为 ${count(component.text, needle)} 次`);
     }
+    if (component.text.includes(ENTERPRISE_PLAN_MARKER)) {
+      if (count(component.text, ENTERPRISE_PLAN_MARKER) !== 1 || count(component.text, "plan_type") !== 1 || component.text.includes("@shopee.com")) fail("v8 企业账户套餐契约无效");
+      const gate = extractOne(component.text, new RegExp(`([A-Za-z_$][\\w$]*)=${escapeRegExp(enterprisePlanPredicate)}\\(${escapeRegExp(dataMatch[4])}\\?\\.plan_type\\),\\{data:`, "g"), "企业账户套餐判断");
+      if (!component.text.includes(`enabled:${gate}}`) || !component.text.includes(`=${gate}?[`)) fail("v8 企业账户判定未同时控制Monthly查询和卡片分流");
+    } else if (count(component.text, "@shopee.com") !== 1) fail("旧v8企业邮箱契约无效");
     if (component.text.includes(MONTHLY_LIMIT_MARKER)) {
       for (const needle of [MONTHLY_LIMIT_MARKER, "limit_amount", "balance_unit", "limit_mode", "unlimited_platform_max"]) {
         if (count(component.text, needle) !== 1) fail(`Monthly 新版额度契约 ${needle} 应恰好出现 1 次`);
@@ -623,7 +671,7 @@ export function analyzeSource(source, context = {}) {
   }
   return {
     status: isCurrent
-      ? component.text.includes(`${classMerge}(\`mx-2 mb-2\`,`) && component.text.includes(MONTHLY_LIMIT_MARKER)
+      ? component.text.includes(`${classMerge}(\`mx-2 mb-2\`,`) && component.text.includes(MONTHLY_LIMIT_MARKER) && component.text.includes(ENTERPRISE_PLAN_MARKER)
         ? "already-patched"
         : "upgrade-ready"
       : marker ? "upgrade-ready" : "ready",
@@ -645,6 +693,7 @@ export function analyzeSource(source, context = {}) {
       bucketMapper,
       usageWindowMapper: usageWindowMapper?.name ?? null,
       monthlyQuotaQuery: monthlyProvider.name,
+      enterprisePlanPredicate,
     },
   };
 }
@@ -678,7 +727,7 @@ function buildComponent(source, analysis, monthlyAlias) {
   // Match the native Usage page: prefer the amount in the response's unit,
   // only use the legacy credit limit when the unit permits it, and keep null unknown.
   const monthlySetup = `${monthlyLimit}=${monthlyResult}?.effective_monthly_limit,${limitAmount}=${monthlyLimit}?.limit_amount,${balanceUnit}=${monthlyResult}?.balance_unit??\`credit\`,${parseNumber}=${props}=>${props}==null?NaN:Number(${props}),${limit}=${monthlyLimit}?.limit_mode===\`unlimited_platform_max\`?NaN:${limitAmount}?.unit===${balanceUnit}?${parseNumber}(${limitAmount}.amount):${balanceUnit}===\`usd\`?NaN:${parseNumber}(${monthlyLimit}?.limit),${usage}=${parseNumber}(${monthlyResult}?.current_month_usage)`;
-  return `function ${analysis.component.name}(${props}){void\`${PATCH_MARKER}\`;void\`${MONTHLY_LIMIT_MARKER}\`;${semanticMarker}let{className:${className}}=${props},{data:${rateResult}}=${a.dataHook}(${a.rateLimitAtom}),${rateData}=${rateResult}===void 0?null:${rateResult},${account}=${a.authHook}(),${corporate}=(${account}.email??\`\`).trim().toLowerCase().endsWith(\`@shopee.com\`),{data:${monthlyResult}}=${monthlyAlias}({accountId:${rateData}?.account_id??null,enabled:${corporate}}),${quotaSetup},${fiveBucket}=${buckets}.find(${props}=>Number.isFinite(${props}?.${windowField})&&${props}.${windowField}>=240&&${props}.${windowField}<=360)??null,${weeklyBucket}=${buckets}.find(${props}=>Number.isFinite(${props}?.${windowField})&&${props}.${windowField}>=10000&&${props}.${windowField}<=10200)??null,${normalize}=${bucket}=>{let ${usedPercent}=${bucket}?.usedPercent,${resetsAt}=${bucket}?.resetsAt,${remaining}=Number.isFinite(${usedPercent})?Math.min(Math.max(100-${usedPercent},0),100):null,${resetLabel}=Number.isFinite(${resetsAt})?new Intl.DateTimeFormat(void 0,{month:\`short\`,day:\`numeric\`,hour:\`2-digit\`,minute:\`2-digit\`}).format(new Date(${resetsAt}*1e3)):\`Unavailable\`;return{remaining:${remaining},metaLabel:\`Resets\`,metaValue:${resetLabel}}},${fiveRow}=${normalize}(${fiveBucket}),${weeklyRow}=${normalize}(${weeklyBucket}),${monthlySetup},${validMonthly}=Number.isFinite(${limit})&&${limit}>=0&&Number.isFinite(${usage}),${monthlyRemaining}=${validMonthly}?${limit}===0?0:Math.min(Math.max(100-${usage}/${limit}*100,0),100):null,${formatNumber}=${props}=>Number.isFinite(${props})?new Intl.NumberFormat(void 0,{maximumFractionDigits:2}).format(Math.max(${props},0)):\`—\`,${monthlyRow}={remaining:${monthlyRemaining},metaLabel:\`Used\`,metaValue:${validMonthly}?${formatNumber}(${usage})+\` / \`+${formatNumber}(${limit}):\`Unavailable\`},${renderRow}=(${props},${className})=>{let ${rateResult}=${className}.remaining==null?\`—\`:String(Math.round(${className}.remaining))+\`%\`;return(0,${a.jsx}.jsxs)(\`div\`,{className:\`flex flex-col gap-1\`,children:[(0,${a.jsx}.jsxs)(\`div\`,{className:\`flex items-center justify-between gap-3 text-sm\`,children:[(0,${a.jsx}.jsx)(\`span\`,{className:\`font-medium\`,children:${props}}),(0,${a.jsx}.jsx)(\`span\`,{className:\`tabular-nums\`,children:${rateResult}})]}),(0,${a.jsx}.jsxs)(\`div\`,{className:\`flex items-center justify-between gap-3 text-xs text-token-text-secondary\`,children:[(0,${a.jsx}.jsx)(\`span\`,{children:${className}.metaLabel}),(0,${a.jsx}.jsx)(\`span\`,{className:\`tabular-nums\`,children:${className}.metaValue})]})]})},${rows}=${corporate}?[${renderRow}(\`Monthly\`,${monthlyRow})]:[${renderRow}(\`5h\`,${fiveRow}),${renderRow}(\`Weekly\`,${weeklyRow})];return(0,${a.jsx}.jsx)(\`div\`,{className:${a.classMerge}(\`mx-2 mb-2\`,${className}),children:(0,${a.jsx}.jsxs)(\`div\`,{role:\`status\`,"aria-live":\`polite\`,className:\`flex w-full flex-col gap-3 rounded-2xl border border-token-border bg-token-main-surface-primary p-3 text-left text-token-foreground\`,children:[(0,${a.jsx}.jsx)(\`div\`,{className:\`text-base font-medium\`,children:\`Usage\`}),...${rows}]})})}`;
+  return `function ${analysis.component.name}(${props}){void\`${PATCH_MARKER}\`;void\`${MONTHLY_LIMIT_MARKER}\`;void\`${ENTERPRISE_PLAN_MARKER}\`;${semanticMarker}let{className:${className}}=${props},{data:${rateResult}}=${a.dataHook}(${a.rateLimitAtom}),${rateData}=${rateResult}===void 0?null:${rateResult},${account}=${a.authHook}(),${corporate}=${a.enterprisePlanPredicate}(${rateData}?.plan_type),{data:${monthlyResult}}=${monthlyAlias}({accountId:${rateData}?.account_id??null,enabled:${corporate}}),${quotaSetup},${fiveBucket}=${buckets}.find(${props}=>Number.isFinite(${props}?.${windowField})&&${props}.${windowField}>=240&&${props}.${windowField}<=360)??null,${weeklyBucket}=${buckets}.find(${props}=>Number.isFinite(${props}?.${windowField})&&${props}.${windowField}>=10000&&${props}.${windowField}<=10200)??null,${normalize}=${bucket}=>{let ${usedPercent}=${bucket}?.usedPercent,${resetsAt}=${bucket}?.resetsAt,${remaining}=Number.isFinite(${usedPercent})?Math.min(Math.max(100-${usedPercent},0),100):null,${resetLabel}=Number.isFinite(${resetsAt})?new Intl.DateTimeFormat(void 0,{month:\`short\`,day:\`numeric\`,hour:\`2-digit\`,minute:\`2-digit\`}).format(new Date(${resetsAt}*1e3)):\`Unavailable\`;return{remaining:${remaining},metaLabel:\`Resets\`,metaValue:${resetLabel}}},${fiveRow}=${normalize}(${fiveBucket}),${weeklyRow}=${normalize}(${weeklyBucket}),${monthlySetup},${validMonthly}=Number.isFinite(${limit})&&${limit}>=0&&Number.isFinite(${usage}),${monthlyRemaining}=${validMonthly}?${limit}===0?0:Math.min(Math.max(100-${usage}/${limit}*100,0),100):null,${formatNumber}=${props}=>Number.isFinite(${props})?new Intl.NumberFormat(void 0,{maximumFractionDigits:2}).format(Math.max(${props},0)):\`—\`,${monthlyRow}={remaining:${monthlyRemaining},metaLabel:\`Used\`,metaValue:${validMonthly}?${formatNumber}(${usage})+\` / \`+${formatNumber}(${limit}):\`Unavailable\`},${renderRow}=(${props},${className})=>{let ${rateResult}=${className}.remaining==null?\`—\`:String(Math.round(${className}.remaining))+\`%\`;return(0,${a.jsx}.jsxs)(\`div\`,{className:\`flex flex-col gap-1\`,children:[(0,${a.jsx}.jsxs)(\`div\`,{className:\`flex items-center justify-between gap-3 text-sm\`,children:[(0,${a.jsx}.jsx)(\`span\`,{className:\`font-medium\`,children:${props}}),(0,${a.jsx}.jsx)(\`span\`,{className:\`tabular-nums\`,children:${rateResult}})]}),(0,${a.jsx}.jsxs)(\`div\`,{className:\`flex items-center justify-between gap-3 text-xs text-token-text-secondary\`,children:[(0,${a.jsx}.jsx)(\`span\`,{children:${className}.metaLabel}),(0,${a.jsx}.jsx)(\`span\`,{className:\`tabular-nums\`,children:${className}.metaValue})]})]})},${rows}=${corporate}?[${renderRow}(\`Monthly\`,${monthlyRow})]:[${renderRow}(\`5h\`,${fiveRow}),${renderRow}(\`Weekly\`,${weeklyRow})];return(0,${a.jsx}.jsx)(\`div\`,{className:${a.classMerge}(\`mx-2 mb-2\`,${className}),children:(0,${a.jsx}.jsxs)(\`div\`,{role:\`status\`,"aria-live":\`polite\`,className:\`flex w-full flex-col gap-3 rounded-2xl border border-token-border bg-token-main-surface-primary p-3 text-left text-token-foreground\`,children:[(0,${a.jsx}.jsx)(\`div\`,{className:\`text-base font-medium\`,children:\`Usage\`}),...${rows}]})})}`;
 }
 
 export function patchSource(source, context = {}) {
@@ -1027,7 +1076,7 @@ function inspectEntitlementSigningTargets(appPath) {
 }
 
 async function signatureInfo(appPath) {
-  const targets = [...inspectEntitlementSigningTargets(appPath), ...EXECUTABLE_SIGNING_TARGETS, ...CONTAINER_SIGNING_TARGETS]
+  const targets = [...inspectNativeSigningTargets(appPath), ...inspectEntitlementSigningTargets(appPath), ...EXECUTABLE_SIGNING_TARGETS, ...CONTAINER_SIGNING_TARGETS]
     .map((relative) => join(appPath, relative));
   const [verifications, details] = await Promise.all([
     Promise.all([
@@ -1271,7 +1320,7 @@ export async function assertDiskCapacity(requirements) {
   }
 }
 
-async function sanitizedEntitlements(target, directory, index) {
+export async function sanitizedEntitlements(target, directory, index) {
   const display = await runAsync("/usr/bin/codesign", ["-d", "--entitlements", ":-", target]);
   if (!display.stdout.includes("<plist")) fail(`无法读取签名权限：${target}`);
   const path = join(directory, `entitlements-${index}.plist`);
@@ -1292,10 +1341,18 @@ function signTarget(target, identity, entitlements = null) {
   run("/usr/bin/codesign", args);
 }
 
+export function signNativeModule(target, identity) {
+  signTarget(target, identity);
+  const display = run("/usr/bin/codesign", ["-d", "--entitlements", ":-", target]);
+  if (display.stdout.trim() && (!display.stdout.includes("<plist") || display.stdout.includes("<key>"))) fail(`原生库重签后仍包含权限：${target}`);
+  run("/usr/bin/codesign", ["--verify", "--strict", target]);
+}
+
 async function signApp(appPath, identity) {
   const resolved = resolve(appPath);
   const directory = mkdtempSync(join(tmpdir(), "codex-quota-card-sign-"));
   try {
+    const nativeTargets = inspectNativeSigningTargets(resolved);
     const entitlementTargets = inspectEntitlementSigningTargets(resolved).map((relative, index) => ({
       relative,
       target: join(resolved, relative),
@@ -1319,6 +1376,7 @@ async function signApp(appPath, identity) {
     if (failedEntitlement) throw failedEntitlement.reason;
     const entitlementPaths = preparedEntitlements.map((result) => result.value);
 
+    for (const relative of nativeTargets) signNativeModule(join(resolved, relative), identity);
     for (const [index, { target }] of entitlementTargets.entries()) {
       signTarget(target, identity, entitlementPaths[index]);
     }

@@ -38,10 +38,12 @@ codesign --verify --deep --strict --verbose=4 /Applications/ChatGPT.app
 - 未知版本必须在内存中完成补丁生成、等长断言和补丁后再次解析。Monthly Hook 可来自跨分包 import，也可来自同分包内具有唯一端点、`accountId/enabled` 参数和一分钟刷新契约的本地函数；候选缺失、重复或作用域不可达时必须拒绝。
 - 额度卡片必须唯一挂载在侧边栏底部。底部区域可由旧版 `absolute inset-x-0 bottom-0` 布局或新版唯一 React key `usage-alert` 证明；若存在收起态固定浮动挂载，必须等长禁用并在补丁后二次解析中确认。
 - 卡片根布局固定使用 `mx-2 mb-2`，内部卡片使用 `w-full`。已安装但缺少完整根布局间距契约的 v8 应进入 `upgrade-ready`，不得误报 `already-patched`。
+- Monthly 分流使用当前额度状态的 `plan_type` 和同一 `account_id`，复用唯一可达、已验证导出与套餐列表语义的原生企业判定，不使用邮箱域名。企业契约标记缺失的旧v8进入 `upgrade-ready`；依赖缺失、重复或判定/查询/渲染分流不一致时拒绝，不退回邮箱判断。
 - `EnableEmbeddedAsarIntegrityValidation` 未明确关闭时，仅当未打补丁目标分包已有有效整体与分块哈希且 ASAR 头部与 Info.plist 一致，才可应用等长补丁；应用时必须同步重写目标分包完整性元数据和 Info.plist 头部哈希，不能以头部哈希替代目标分包校验。
 - 所有客户端写入必须保留原子替换、互斥锁、源文件竞态检查和失败回滚，不得增加吞错兜底。
 - 签名必须由内到外执行。Codex Framework 与 Sparkle 内的独立可执行文件和应用必须作为显式签名目标处理；最终同时执行根应用深度严格检查和全部预期目标的逐项严格检查。
 - 临时签名不得携带 OpenAI Team ID 绑定权限或 `com.apple.developer.aps-environment` 等需要 Apple 授权的受限 entitlement。`codesign --verify` 通过不代表 AMFI 可启动；修改签名或完整性流程后必须检查启动期 AMFI 日志。
+- 日志确认的五个原生库采用显式签名清单，不附加主进程 entitlement，并逐项严格验签。标准测试账户不能读取系统日志时，仅允许管理员对完整启动证据及单独日志权限失败进行独立补验；原报告保留，其他失败不得覆盖。
 - 端到端验证只在隔离副本上执行，不得占用、关闭或直接实验用户正在运行的正式客户端。应用、恢复、静态签名、AMFI 启动和视觉验收必须分别记录。
 - `--allow-updated-signature` 只允许处理已精确识别的补丁后自动升级状态，不是通用签名绕过。语义依赖、ASAR fuse 或嵌套签名结构变化时必须明确拒绝并新增适配。
 

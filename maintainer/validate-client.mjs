@@ -10,6 +10,14 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const PATCHER = join(ROOT, 'bin/patch-codex-quota-card.mjs');
 const FRAMEWORK = 'Contents/Frameworks/Codex Framework.framework/Versions/Current/Codex Framework';
 export const OFFICIAL_REQUIREMENT = '=anchor apple generic and identifier "com.openai.codex" and certificate leaf[subject.OU] = "2DC432GLL2"';
+export function assertAmfiLog(log) {
+  if (/denied|disallow|restricted entitlement|invalid signature|constraint violation|failed fatally/i.test(log)) throw new Error('路径关联的 AMFI 日志包含拒绝或权限约束记录');
+}
+export function amfiQueryArguments(workspace, start, end) {
+  const format = value => new Date(value).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '+0000');
+  const predicate = `(process == "amfid" OR process == "kernel" OR process == "taskgated-helper") AND eventMessage CONTAINS ${JSON.stringify(workspace)}`;
+  return ['show', '--style', 'json', '--start', format(start), '--end', format(end), '--predicate', predicate];
+}
 export function isWithin(parent, path) {
   const part = relative(parent, path);
   return part === '' || (!isAbsolute(part) && part !== '..' && !part.startsWith('../'));
@@ -38,9 +46,10 @@ export function parseOptions(args) {
   if (!options.app || !options.output) throw new Error('用法：node maintainer/validate-client.mjs --app <官方.app> --output <项目外报告目录> [--launch]');
   return options;
 }
+export const AUTOMATED_STEP_NAMES = ['发行工具完整性', '官方身份', '隔离复制', '补丁前兼容', '应用补丁', '备份校验', '补丁后兼容与全部签名', '启动与 AMFI 观察', '恢复及恢复后签名', '源客户端未改变'];
 export function summarize(report) {
   const failed = report.steps.some(step => step.status === 'failed');
-  const complete = ['发行工具完整性', '官方身份', '隔离复制', '补丁前兼容', '应用补丁', '备份校验', '补丁后兼容与全部签名', '启动与 AMFI 观察', '恢复及恢复后签名', '源客户端未改变']
+  const complete = AUTOMATED_STEP_NAMES
     .every(name => report.steps.some(step => step.name === name && step.status === 'passed'));
   return {
     status: failed ? 'failed' : !report.finishedAt ? 'running' : complete ? 'automated-passed' : 'partial',
@@ -152,13 +161,13 @@ export async function validateClient(options) {
         try {
           await Promise.race([delay(25000), exited]);
           if (launchError) throw launchError;
-          if (closed) throw new Error(`隔离客户端提前退出：${child.exitCode}/${child.signalCode}`);
           const logs = await readFile(join(workspace, 'startup.log'), 'utf8');
+          report.launchObservation = { status: !closed && !/FATAL[:\s]/.test(logs) && logs.includes('Launching app') ? 'passed' : 'failed', pid: child.pid, startedAt: started.toISOString(), finishedAt: new Date().toISOString(), survivedSeconds: closed ? 0 : 25, startupSha256: createHash('sha256').update(logs).digest('hex'), startupBytes: Buffer.byteLength(logs) };
+          await save();
+          const amfi = await command('amfi', '/usr/bin/log', amfiQueryArguments(workspace, started, report.launchObservation.finishedAt));
+          assertAmfiLog(amfi);
+          if (closed) throw new Error(`隔离客户端提前退出：${child.exitCode}/${child.signalCode}`);
           if (/FATAL[:\s]/.test(logs) || !logs.includes('Launching app')) throw new Error('启动日志出现 FATAL 或缺少初始化标记');
-          const predicate = `(process == "amfid" OR process == "kernel" OR process == "taskgated-helper") AND eventMessage CONTAINS ${JSON.stringify(workspace)}`;
-          const since = started.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '+0000');
-          const amfi = await command('amfi', '/usr/bin/log', ['show', '--style', 'json', '--start', since, '--predicate', predicate]);
-          if (/denied|disallow|restricted entitlement|invalid signature/i.test(amfi)) throw new Error('路径关联的 AMFI 日志包含拒绝记录');
           return { pid: child.pid, survivedSeconds: 25, profile, amfiObservation: '观察窗口内未发现路径关联拒绝，不代表完整运行验收' };
         } finally {
           if (child.pid) {

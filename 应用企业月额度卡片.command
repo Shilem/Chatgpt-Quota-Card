@@ -12,7 +12,7 @@ initialize_launcher
 print_banner "Codex 侧边栏额度卡片 · $release_version"
 echo
 printf "%s功能介绍%s\n" "$style_bold" "$style_reset"
-printf "  %s✓%s Shopee 企业账户：展示 Monthly 剩余额度和本月用量\n" "$style_green" "$style_reset"
+printf "  %s✓%s 原生企业类别账户：展示 Monthly 剩余额度和本月用量，不限邮箱域名\n" "$style_green" "$style_reset"
 printf "  %s✓%s 其他账户：展示 5h、Weekly 剩余额度及重置时间\n" "$style_green" "$style_reset"
 printf "  %s✓%s 仅显示文字信息，不显示进度条\n" "$style_green" "$style_reset"
 printf "  %s✓%s 执行前自动检查，写入前备份，失败时自动回滚\n" "$style_green" "$style_reset"
