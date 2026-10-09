@@ -1,4 +1,4 @@
-# Codex 侧边栏额度卡片补丁
+# Chatgpt-Quota-Card
 
 这个工具给 macOS Codex/ChatGPT 客户端左侧栏底部增加一张常驻额度卡片：
 
@@ -134,7 +134,7 @@ node bin/patch-codex-quota-card.mjs validate-backup --backup backups/<版本-时
 
 ### 开发与候选发行
 
-开发仓库：`Shilem/Chatgpt_Quota_Card`。目前为私有仓库，普通接收者不能匿名下载其 Release；用户端自动更新尚未实现，不要把维护者 Token 放入发行包。
+开发仓库：[Shilem/Chatgpt-Quota-Card](https://github.com/Shilem/Chatgpt-Quota-Card)。目前为私有仓库，普通接收者不能匿名下载其 Release；用户端自动更新尚未实现，不要把维护者 Token 放入发行包。
 
 维护文件位于 `maintainer/`，GitHub Actions 配置位于 `.github/workflows/verify.yml`，均不进入用户发行包。开发目录运行：
 
